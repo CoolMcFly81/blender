@@ -86,9 +86,7 @@ public:
 	CUmodule cuModule;
 	map<device_ptr, bool> tex_interp_map;
 	int cuDevId;
-	int cuDevArchitecture;
 	bool first_error;
-	bool use_texture_storage;
 
 	struct PixelMem {
 		GLuint cuPBO;
@@ -176,7 +174,6 @@ public:
 	{
 		first_error = true;
 		background = background_;
-		use_texture_storage = true;
 
 		cuDevId = info.num;
 		cuDevice = 0;
@@ -206,15 +203,6 @@ public:
 
 		if(cuda_error_(result, "cuCtxCreate"))
 			return;
-
-		int major, minor;
-		cuDeviceComputeCapability(&major, &minor, cuDevId);
-		cuDevArchitecture = major*100 + minor*10;
-
-		/* In order to use full 6GB of memory on Titan cards, use arrays instead
-		 * of textures. On earlier cards this seems slower, but on Titan it is
-		 * actually slightly faster in tests. */
-		use_texture_storage = (cuDevArchitecture < 300);
 
 		cuda_pop_context();
 	}
@@ -495,7 +483,7 @@ public:
 		CUarray_format_enum format;
 		size_t dsize = datatype_size(mem.data_type);
 		size_t size = mem.memory_size();
-		bool use_texture = (interpolation != INTERPOLATION_NONE) || use_texture_storage;
+		bool use_texture = (interpolation != INTERPOLATION_NONE);
 
 		if(use_texture) {
 
