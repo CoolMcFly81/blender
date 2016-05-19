@@ -32,8 +32,8 @@
 #ifdef WITH_DECKLINK
 
 // INT64_C fix for some linux machines (C99ism)
-#ifndef __STDC_CONSTANT_MACROS
-#define __STDC_CONSTANT_MACROS
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
 #endif
 #include <stdint.h>
 #include <string.h>

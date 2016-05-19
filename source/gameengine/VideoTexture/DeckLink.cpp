@@ -33,6 +33,10 @@
 
 // implementation
 
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#endif
+
 #include "atomic_ops.h"
 
 #include "EXP_PyObjectPlus.h"
