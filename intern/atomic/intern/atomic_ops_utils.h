@@ -82,9 +82,9 @@
 #endif
 
 #ifdef UINTPTR_MAX
-#  if (UINTPTR_MAX == 0xFFFFFFFFU)
+#  if (UINTPTR_MAX == 0xFFFFFFFF)
 #    define LG_SIZEOF_PTR 4
-#  elif (UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFUL)
+#  elif (UINTPTR_MAX == 0xFFFFFFFFFFFFFFFF)
 #    define LG_SIZEOF_PTR 8
 #  endif
 #elif defined(__WORDSIZE)  /* Fallback for older glibc and cpp */
