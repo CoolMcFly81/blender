@@ -444,7 +444,6 @@ int main(
 	int validArguments=0;
 	bool samplesParFound = false;
 	GHOST_TUns16 aasamples = 0;
-	int alphaBackground = 0;
 	
 #ifdef WIN32
 	char **argv;
@@ -839,12 +838,6 @@ int main(
 				}
 				break;
 			}
-			case 'a':   // allow window to blend with display background
-			{
-				i++;
-				alphaBackground = 1;
-				break;
-			}
 			default:  //not recognized
 			{
 				printf("Unknown argument: %s\n", argv[i++]);
@@ -1048,7 +1041,7 @@ int main(
 #endif
 								{
 									app.startFullScreen(fullScreenWidth, fullScreenHeight, fullScreenBpp, fullScreenFrequency,
-									                    stereoWindow, stereomode, alphaBackground, aasamples, (scene->gm.playerflag & GAME_PLAYER_DESKTOP_RESOLUTION));
+									                    stereoWindow, stereomode, aasamples, (scene->gm.playerflag & GAME_PLAYER_DESKTOP_RESOLUTION));
 								}
 							}
 							else
@@ -1095,7 +1088,7 @@ int main(
 										app.startEmbeddedWindow(title, parentWindow, stereoWindow, stereomode, aasamples);
 									else
 										app.startWindow(title, windowLeft, windowTop, windowWidth, windowHeight,
-										                stereoWindow, stereomode, alphaBackground, aasamples);
+										                stereoWindow, stereomode, aasamples);
 
 									if (SYS_GetCommandLineInt(syshandle, "nomipmap", 0)) {
 										GPU_set_mipmap(0);
