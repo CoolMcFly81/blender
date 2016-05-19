@@ -86,11 +86,20 @@
 #    define LG_SIZEOF_PTR 4
 #  elif (UINTPTR_MAX == 0xFFFFFFFFFFFFFFFF)
 #    define LG_SIZEOF_PTR 8
+#  else
+#    warning "UINTPTR_MAX is defined but does not match a known value"
+#    define UINTPTR_MAX 1
 #  endif
 #elif defined(__WORDSIZE)  /* Fallback for older glibc and cpp */
 #  if (__WORDSIZE == 32)
 #    define LG_SIZEOF_PTR 4
 #  elif (__WORDSIZE == 64)
+#    define LG_SIZEOF_PTR 8
+#  endif
+#elif defined(WORD_BIT)  /* Fallback for older glibc and cpp */
+#  if (WORD_BIT == 32)
+#    define LG_SIZEOF_PTR 4
+#  elif (WORD_BIT == 64)
 #    define LG_SIZEOF_PTR 8
 #  endif
 #endif
