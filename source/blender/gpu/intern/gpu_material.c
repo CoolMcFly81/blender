@@ -31,7 +31,6 @@
  * Manages materials, lights and textures.
  */
 
-
 #include <math.h>
 #include <string.h>
 
@@ -49,7 +48,6 @@
 
 #include "BKE_anim.h"
 #include "BKE_colortools.h"
-#include "BKE_DerivedMesh.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
@@ -68,7 +66,9 @@
 
 #include "gpu_codegen.h"
 
-#include <string.h>
+#ifdef WITH_OPENSUBDIV
+#  include "BKE_DerivedMesh.h"
+#endif
 
 /* Structs */
 
@@ -211,6 +211,9 @@ static void gpu_material_set_attrib_id(GPUMaterial *material)
 		char name[32];
 		BLI_snprintf(name, sizeof(name), "att%d", attribs->layer[a].attribid);
 		attribs->layer[a].glindex = GPU_shader_get_attribute(shader, name);
+
+		BLI_snprintf(name, sizeof(name), "att%d_info", attribs->layer[a].attribid);
+		attribs->layer[a].glinfoindoex = GPU_shader_get_uniform(shader, name);
 
 		if (attribs->layer[a].glindex >= 0) {
 			attribs->layer[b] = attribs->layer[a];
@@ -512,6 +515,11 @@ bool GPU_material_do_color_management(GPUMaterial *mat)
 bool GPU_material_use_new_shading_nodes(GPUMaterial *mat)
 {
 	return BKE_scene_use_new_shading_nodes(mat->scene);
+}
+
+bool GPU_material_use_world_space_shading(GPUMaterial *mat)
+{
+	return BKE_scene_use_world_space_shading(mat->scene);
 }
 
 static GPUNodeLink *lamp_get_visibility(GPUMaterial *mat, GPULamp *lamp, GPUNodeLink **lv, GPUNodeLink **dist)
