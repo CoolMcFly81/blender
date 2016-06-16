@@ -163,7 +163,6 @@ option_defaults_init(
 	_init_FFTW3
 	_init_GAMEENGINE
 	_init_OPENSUBDIV
-	_init_DECKLINK
 )
 
 # customize...
@@ -184,7 +183,6 @@ elseif(WIN32)
 elseif(APPLE)
 	set(_init_JACK                           OFF)
 	set(_init_OPENSUBDIV                     OFF)
-	set(_init_DECKLINK			 OFF)
 endif()
 
 
@@ -231,8 +229,7 @@ option(WITH_BULLET        "Enable Bullet (Physics Engine)" ON)
 option(WITH_SYSTEM_BULLET "Use the systems bullet library (currently unsupported due to missing features in upstream!)" )
 mark_as_advanced(WITH_SYSTEM_BULLET)
 option(WITH_GAMEENGINE    "Enable Game Engine" ${_init_GAMEENGINE})
-option(WITH_PLAYER        "Build Player" ON)
-option(WITH_DECKLINK      "Support BlackMagicDesign DeckLink cards in the BGE" ${_init_DECKLINK})
+option(WITH_PLAYER        "Build Player" OFF)
 option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ${_init_OPENCOLORIO})
 
 # Compositor
@@ -276,7 +273,6 @@ endif()
 if(WITH_X11)
 	option(WITH_X11_XINPUT    "Enable X11 Xinput (tablet support and unicode input)"  ON)
 	option(WITH_X11_XF86VMODE "Enable X11 video mode switching"                       ON)
-	option(WITH_X11_ALPHA     "Enable X11 transparent background"                     ON)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -727,7 +723,6 @@ if(WITH_GHOST_SDL OR WITH_HEADLESS)
 	set(WITH_X11           OFF)
 	set(WITH_X11_XINPUT    OFF)
 	set(WITH_X11_XF86VMODE OFF)
-	set(WITH_X11_ALPHA     OFF)
 	set(WITH_GHOST_XDND    OFF)
 	set(WITH_INPUT_IME     OFF)
 endif()
@@ -864,16 +859,6 @@ if(WITH_X11)
 			list(APPEND PLATFORM_LINKLIBS ${X11_Xxf86vmode_LIB})
 		else()
 			set(WITH_X11_XF86VMODE OFF)
-		endif()
-	endif()
-
-	if(WITH_X11_ALPHA)
-		find_library(X11_Xrender_LIB Xrender  ${X11_LIB_SEARCH_PATH})
-		mark_as_advanced(X11_Xrender_LIB)
-		if (X11_Xrender_LIB)
-			list(APPEND PLATFORM_LINKLIBS ${X11_Xrender_LIB})
-		else()
-			set(WITH_X11_ALPHA OFF)
 		endif()
 	endif()
 
@@ -3214,7 +3199,6 @@ if(FIRST_RUN)
 
 	info_cfg_text("System Options:")
 	info_cfg_option(WITH_INSTALL_PORTABLE)
-	info_cfg_option(WITH_X11_ALPHA)
 	info_cfg_option(WITH_X11_XF86VMODE)
 	info_cfg_option(WITH_X11_XINPUT)
 	info_cfg_option(WITH_MEM_JEMALLOC)
