@@ -393,6 +393,9 @@ static ShaderNode *add_node(Scene *scene,
 			case BL::ShaderNodeBsdfAnisotropic::distribution_GGX:
 				aniso->distribution = CLOSURE_BSDF_MICROFACET_GGX_ANISO_ID;
 				break;
+			case BL::ShaderNodeBsdfAnisotropic::distribution_MULTI_GGX:
+				aniso->distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ANISO_ID;
+				break;
 			case BL::ShaderNodeBsdfAnisotropic::distribution_ASHIKHMIN_SHIRLEY:
 				aniso->distribution = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ANISO_ID;
 				break;
@@ -439,6 +442,9 @@ static ShaderNode *add_node(Scene *scene,
 			case BL::ShaderNodeBsdfGlossy::distribution_ASHIKHMIN_SHIRLEY:
 				glossy->distribution = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ANISO_ID;
 				break;
+			case BL::ShaderNodeBsdfGlossy::distribution_MULTI_GGX:
+				glossy->distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID;
+				break;
 		}
 		node = glossy;
 	}
@@ -455,6 +461,9 @@ static ShaderNode *add_node(Scene *scene,
 			case BL::ShaderNodeBsdfGlass::distribution_GGX:
 				glass->distribution = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
 				break;
+			case BL::ShaderNodeBsdfGlass::distribution_MULTI_GGX:
+				glass->distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
+				break;
 		}
 		node = glass;
 	}
@@ -469,6 +478,8 @@ static ShaderNode *add_node(Scene *scene,
 				refraction->distribution = CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
 				break;
 			case BL::ShaderNodeBsdfRefraction::distribution_GGX:
+			/* Multiscattering GGX isn't supported for the Refraction BSDF. */
+			case BL::ShaderNodeBsdfRefraction::distribution_MULTI_GGX:
 				refraction->distribution = CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
 				break;
 		}
