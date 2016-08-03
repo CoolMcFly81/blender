@@ -51,6 +51,11 @@
 #  include "GHOST_ContextGLX.h"
 #endif
 
+/* for XIWarpPointer */
+#ifdef WITH_X11_XINPUT
+#  include <X11/extensions/XInput2.h>
+#endif
+
 #if defined(__sun__) || defined(__sun) || defined(__sparc) || defined(__sparc__) || defined(_AIX)
 #  include <strings.h>
 #endif
@@ -566,7 +571,7 @@ GHOST_WindowX11(GHOST_SystemX11 *system,
 	}
 
 #ifdef WITH_X11_XINPUT
-	initXInputDevices();
+	refreshXInputDevices();
 
 	m_tabletData.Active = GHOST_kTabletModeNone;
 #endif
@@ -633,45 +638,40 @@ bool GHOST_WindowX11::createX11_XIC()
 #endif
 
 #ifdef WITH_X11_XINPUT
-void GHOST_WindowX11::initXInputDevices()
+void GHOST_WindowX11::refreshXInputDevices()
 {
-	XExtensionVersion *version = XGetExtensionVersion(m_display, INAME);
+	if (m_system->m_xinput_version.present) {
+		GHOST_SystemX11::GHOST_TabletX11 &xtablet = m_system->GetXTablet();
+		XEventClass xevents[8], ev;
+		int dcount = 0;
 
-	if (version && (version != (XExtensionVersion *)NoSuchExtension)) {
-		if (version->present) {
-			GHOST_SystemX11::GHOST_TabletX11 &xtablet = m_system->GetXTablet();
-			XEventClass xevents[8], ev;
-			int dcount = 0;
+		/* With modern XInput (xlib 1.6.2 at least and/or evdev 2.9.0) and some 'no-name' tablets
+		 * like 'UC-LOGIC Tablet WP5540U', we also need to 'select' ButtonPress for motion event,
+		 * otherwise we do not get any tablet motion event once pen is pressed... See T43367.
+		 */
 
-			/* With modern XInput (xlib 1.6.2 at least and/or evdev 2.9.0) and some 'no-name' tablets
-			 * like 'UC-LOGIC Tablet WP5540U', we also need to 'select' ButtonPress for motion event,
-			 * otherwise we do not get any tablet motion event once pen is pressed... See T43367.
-			 */
-
-			if (xtablet.StylusDevice) {
-				DeviceMotionNotify(xtablet.StylusDevice, xtablet.MotionEvent, ev);
-				if (ev) xevents[dcount++] = ev;
-				DeviceButtonPress(xtablet.StylusDevice, xtablet.PressEvent, ev);
-				if (ev) xevents[dcount++] = ev;
-				ProximityIn(xtablet.StylusDevice, xtablet.ProxInEvent, ev);
-				if (ev) xevents[dcount++] = ev;
-				ProximityOut(xtablet.StylusDevice, xtablet.ProxOutEvent, ev);
-				if (ev) xevents[dcount++] = ev;
-			}
-			if (xtablet.EraserDevice) {
-				DeviceMotionNotify(xtablet.EraserDevice, xtablet.MotionEventEraser, ev);
-				if (ev) xevents[dcount++] = ev;
-				DeviceButtonPress(xtablet.EraserDevice, xtablet.PressEventEraser, ev);
-				if (ev) xevents[dcount++] = ev;
-				ProximityIn(xtablet.EraserDevice, xtablet.ProxInEventEraser, ev);
-				if (ev) xevents[dcount++] = ev;
-				ProximityOut(xtablet.EraserDevice, xtablet.ProxOutEventEraser, ev);
-				if (ev) xevents[dcount++] = ev;
-			}
-
-			XSelectExtensionEvent(m_display, m_window, xevents, dcount);
+		if (xtablet.StylusDevice) {
+			DeviceMotionNotify(xtablet.StylusDevice, xtablet.MotionEvent, ev);
+			if (ev) xevents[dcount++] = ev;
+			DeviceButtonPress(xtablet.StylusDevice, xtablet.PressEvent, ev);
+			if (ev) xevents[dcount++] = ev;
+			ProximityIn(xtablet.StylusDevice, xtablet.ProxInEvent, ev);
+			if (ev) xevents[dcount++] = ev;
+			ProximityOut(xtablet.StylusDevice, xtablet.ProxOutEvent, ev);
+			if (ev) xevents[dcount++] = ev;
 		}
-		XFree(version);
+		if (xtablet.EraserDevice) {
+			DeviceMotionNotify(xtablet.EraserDevice, xtablet.MotionEventEraser, ev);
+			if (ev) xevents[dcount++] = ev;
+			DeviceButtonPress(xtablet.EraserDevice, xtablet.PressEventEraser, ev);
+			if (ev) xevents[dcount++] = ev;
+			ProximityIn(xtablet.EraserDevice, xtablet.ProxInEventEraser, ev);
+			if (ev) xevents[dcount++] = ev;
+			ProximityOut(xtablet.EraserDevice, xtablet.ProxOutEventEraser, ev);
+			if (ev) xevents[dcount++] = ev;
+		}
+
+		XSelectExtensionEvent(m_display, m_window, xevents, dcount);
 	}
 }
 
@@ -1525,7 +1525,21 @@ setWindowCursorGrab(
 			/* use to generate a mouse move event, otherwise the last event
 			 * blender gets can be outside the screen causing menus not to show
 			 * properly unless the user moves the mouse */
-			XWarpPointer(m_display, None, None, 0, 0, 0, 0, 0, 0);
+
+#ifdef WITH_X11_XINPUT
+			if ((m_system->m_xinput_version.present) &&
+			    (m_system->m_xinput_version.major_version >= 2))
+			{
+				int device_id;
+				if (XIGetClientPointer(m_display, None, &device_id) != False) {
+					XIWarpPointer(m_display, device_id, None, None, 0, 0, 0, 0, 0, 0);
+				}
+			}
+			else
+#endif
+			{
+				XWarpPointer(m_display, None, None, 0, 0, 0, 0, 0, 0);
+			}
 		}
 
 		/* Almost works without but important otherwise the mouse GHOST location can be incorrect on exit */

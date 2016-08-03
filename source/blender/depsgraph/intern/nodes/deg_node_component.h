@@ -24,7 +24,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/depsgraph/intern/depsnode_component.h
+/** \file blender/depsgraph/intern/nodes/deg_node_component.h
  *  \ingroup depsgraph
  */
 
@@ -159,7 +159,7 @@ struct ComponentDepsNode : public DepsNode {
 	// XXX: a poll() callback to check if component's first node can be started?
 
 	/* Temporary bitmask, used during graph construction. */
-	int layers;
+	unsigned int layers;
 };
 
 /* ---------------------------------------- */
