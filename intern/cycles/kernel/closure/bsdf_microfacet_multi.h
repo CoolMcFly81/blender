@@ -338,36 +338,32 @@ ccl_device void bsdf_microfacet_multi_ggx_blur(ShaderClosure *sc, float roughnes
 
 /* Multiscattering GGX Glossy closure */
 
-ccl_device int bsdf_microfacet_multi_ggx_common_setup(MicrofacetBsdf *bsdf, bool use_fresnel = false)
+ccl_device int bsdf_microfacet_multi_ggx_common_setup(MicrofacetBsdf *bsdf)
 {
 	bsdf->alpha_x = clamp(bsdf->alpha_x, 1e-4f, 1.0f);
 	bsdf->alpha_y = clamp(bsdf->alpha_y, 1e-4f, 1.0f);
 	bsdf->extra->color.x = saturate(bsdf->extra->color.x);
 	bsdf->extra->color.y = saturate(bsdf->extra->color.y);
 	bsdf->extra->color.z = saturate(bsdf->extra->color.z);
-	bsdf->extra->use_fresnel = use_fresnel;
-	bsdf->extra->cspec0.x = saturate(bsdf->extra->cspec0.x);
-	bsdf->extra->cspec0.y = saturate(bsdf->extra->cspec0.y);
-	bsdf->extra->cspec0.z = saturate(bsdf->extra->cspec0.z);
 
 	bsdf->type = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID;
 
 	return SD_BSDF|SD_BSDF_HAS_EVAL|SD_BSDF_NEEDS_LCG;
 }
 
-ccl_device int bsdf_microfacet_multi_ggx_aniso_setup(MicrofacetBsdf *bsdf, bool use_fresnel = false)
+ccl_device int bsdf_microfacet_multi_ggx_aniso_setup(MicrofacetBsdf *bsdf)
 {
 	if(is_zero(bsdf->T))
 		bsdf->T = make_float3(1.0f, 0.0f, 0.0f);
 
-	return bsdf_microfacet_multi_ggx_common_setup(bsdf, use_fresnel);
+	return bsdf_microfacet_multi_ggx_common_setup(bsdf);
 }
 
-ccl_device int bsdf_microfacet_multi_ggx_setup(MicrofacetBsdf *bsdf, bool use_fresnel = false)
+ccl_device int bsdf_microfacet_multi_ggx_setup(MicrofacetBsdf *bsdf)
 {
 	bsdf->alpha_y = bsdf->alpha_x;
 
-	return bsdf_microfacet_multi_ggx_common_setup(bsdf, use_fresnel);
+	return bsdf_microfacet_multi_ggx_common_setup(bsdf);
 }
 
 ccl_device float3 bsdf_microfacet_multi_ggx_eval_transmit(const ShaderClosure *sc, const float3 I, const float3 omega_in, float *pdf, ccl_addr_space uint *lcg_state) {
@@ -426,7 +422,7 @@ ccl_device int bsdf_microfacet_multi_ggx_sample(KernelGlobals *kg, const ShaderC
 
 /* Multiscattering GGX Glass closure */
 
-ccl_device int bsdf_microfacet_multi_ggx_glass_setup(MicrofacetBsdf *bsdf, bool use_fresnel = false)
+ccl_device int bsdf_microfacet_multi_ggx_glass_setup(MicrofacetBsdf *bsdf)
 {
 	bsdf->alpha_x = clamp(bsdf->alpha_x, 1e-4f, 1.0f);
 	bsdf->alpha_y = bsdf->alpha_x;
@@ -434,10 +430,6 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_setup(MicrofacetBsdf *bsdf, bool 
 	bsdf->extra->color.x = saturate(bsdf->extra->color.x);
 	bsdf->extra->color.y = saturate(bsdf->extra->color.y);
 	bsdf->extra->color.z = saturate(bsdf->extra->color.z);
-	bsdf->extra->use_fresnel = use_fresnel;
-	bsdf->extra->cspec0.x = saturate(bsdf->extra->cspec0.x);
-	bsdf->extra->cspec0.y = saturate(bsdf->extra->cspec0.y);
-	bsdf->extra->cspec0.z = saturate(bsdf->extra->cspec0.z);
 
 	bsdf->type = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
 
