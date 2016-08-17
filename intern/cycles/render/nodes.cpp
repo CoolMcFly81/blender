@@ -2220,6 +2220,124 @@ void DiffuseBsdfNode::compile(OSLCompiler& compiler)
 	compiler.add(this, "node_diffuse_bsdf");
 }
 
+/* Disney BSDF Closure */
+NODE_DEFINE(DisneyBsdfNode)
+{
+	NodeType* type = NodeType::add("disney_bsdf", create, NodeType::SHADER);
+
+	SOCKET_IN_COLOR(base_color, "BaseColor", make_float3(0.8f, 0.8f, 0.8f));
+	SOCKET_IN_COLOR(subsurface_color, "SubsurfaceColor", make_float3(0.8f, 0.8f, 0.8f));
+	SOCKET_IN_FLOAT(metallic, "Metallic", 0.0f);
+	SOCKET_IN_FLOAT(subsurface, "Subsurface", 0.0f);
+	SOCKET_IN_FLOAT(specular, "Specular", 0.0f);
+	SOCKET_IN_FLOAT(roughness, "Roughness", 0.0f);
+	SOCKET_IN_FLOAT(specularTint, "SpecularTint", 0.0f);
+	SOCKET_IN_FLOAT(anisotropic, "Anisotropic", 0.0f);
+	SOCKET_IN_FLOAT(sheen, "Sheen", 0.0f);
+	SOCKET_IN_FLOAT(sheenTint, "SheenTint", 0.0f);
+	SOCKET_IN_FLOAT(clearcoat, "Clearcoat", 0.0f);
+	SOCKET_IN_FLOAT(clearcoatGloss, "ClearcoatGloss", 0.0f);
+	SOCKET_IN_FLOAT(ior, "IOR", 0.0f);
+	SOCKET_IN_FLOAT(transparency, "Transparency", 0.0f);
+	SOCKET_IN_FLOAT(anisotropicRotation, "AnisotropicRotation", 0.0f);
+	SOCKET_IN_NORMAL(normal, "Normal", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_NORMAL);
+	SOCKET_IN_NORMAL(clearcoatNormal, "ClearcoatNormal", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_NORMAL);
+	SOCKET_IN_NORMAL(tangent, "Tangent", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_TANGENT);
+	SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
+
+	SOCKET_OUT_CLOSURE(BSDF, "BSDF");
+
+	return type;
+}
+
+DisneyBsdfNode::DisneyBsdfNode()
+	: ShaderNode(node_type)
+{
+	special_type = SHADER_SPECIAL_TYPE_CLOSURE;
+	closure = CLOSURE_BSDF_DISNEY_ID;
+}
+
+void DisneyBsdfNode::compile(SVMCompiler& compiler, ShaderInput *metallic, ShaderInput *subsurface,
+	ShaderInput *specular, ShaderInput *roughness, ShaderInput *specularTint, ShaderInput *anisotropic,
+	ShaderInput *sheen, ShaderInput *sheenTint, ShaderInput *clearcoat, ShaderInput *clearcoatGloss,
+	ShaderInput *ior, ShaderInput *transparency, ShaderInput *anisotropicRotation)
+{
+	ShaderInput *base_color_in = input("BaseColor");
+	ShaderInput *subsurface_color_in = input("SubsurfaceColor");
+	ShaderInput *normal_in = input("Normal");
+	ShaderInput *clearcoat_normal_in = input("ClearcoatNormal");
+	ShaderInput *tangent_in = input("Tangent");
+
+	float3 weight = make_float3(1.0f, 1.0f, 1.0f);
+
+	/*if (base_color_in->link)
+		compiler.add_node(NODE_CLOSURE_WEIGHT, compiler.stack_assign(base_color_in));
+	else
+		compiler.add_node(NODE_CLOSURE_SET_WEIGHT, base_color_in->value);*/
+	compiler.add_node(NODE_CLOSURE_SET_WEIGHT, weight);
+
+	int normal_offset = compiler.stack_assign_if_linked(normal_in);
+	int clearcoat_normal_offset = compiler.stack_assign_if_linked(clearcoat_normal_in);
+	int tangent_offset = compiler.stack_assign_if_linked(tangent_in);
+	int specular_offset = compiler.stack_assign(specular);
+	int roughness_offset = compiler.stack_assign(roughness);
+	int specularTint_offset = compiler.stack_assign(specularTint);
+	int anisotropic_offset = compiler.stack_assign(anisotropic);
+	int sheen_offset = compiler.stack_assign(sheen);
+	int sheenTint_offset = compiler.stack_assign(sheenTint);
+	int clearcoat_offset = compiler.stack_assign(clearcoat);
+	int clearcoatGloss_offset = compiler.stack_assign(clearcoatGloss);
+	int ior_offset = compiler.stack_assign(ior);
+	int transparency_offset = compiler.stack_assign(transparency);
+	int anisotropic_rotation_offset = compiler.stack_assign(anisotropicRotation);
+
+	compiler.add_node(NODE_CLOSURE_BSDF,
+		compiler.encode_uchar4(closure,
+		compiler.stack_assign(metallic),
+		compiler.stack_assign(subsurface),
+		compiler.closure_mix_weight_offset()),
+		__float_as_int((metallic) ? get_float(metallic->socket_type) : 0.0f),
+		__float_as_int((subsurface) ? get_float(subsurface->socket_type) : 0.0f));
+
+	compiler.add_node(normal_offset, tangent_offset,
+		compiler.encode_uchar4(specular_offset, roughness_offset, specularTint_offset, anisotropic_offset),
+		compiler.encode_uchar4(sheen_offset, sheenTint_offset, clearcoat_offset, clearcoatGloss_offset));
+
+	compiler.add_node(compiler.encode_uchar4(ior_offset, transparency_offset, anisotropic_rotation_offset, SVM_STACK_INVALID),
+		SVM_STACK_INVALID, SVM_STACK_INVALID, SVM_STACK_INVALID);
+
+	float3 bc_default = get_float3(base_color_in->socket_type);
+
+	compiler.add_node(((base_color_in->link) ? compiler.stack_assign(base_color_in) : SVM_STACK_INVALID),
+		__float_as_int(bc_default.x), __float_as_int(bc_default.y), __float_as_int(bc_default.z));
+
+	compiler.add_node(clearcoat_normal_offset, SVM_STACK_INVALID, SVM_STACK_INVALID, SVM_STACK_INVALID);
+
+	float3 ss_default = get_float3(subsurface_color_in->socket_type);
+
+	compiler.add_node(((subsurface_color_in->link) ? compiler.stack_assign(subsurface_color_in) : SVM_STACK_INVALID),
+		__float_as_int(ss_default.x), __float_as_int(ss_default.y), __float_as_int(ss_default.z));
+}
+
+void DisneyBsdfNode::compile(SVMCompiler& compiler)
+{
+	compile(compiler, input("Metallic"), input("Subsurface"), input("Specular"), input("Roughness"),
+		input("SpecularTint"), input("Anisotropic"), input("Sheen"), input("SheenTint"),
+		input("Clearcoat"), input("ClearcoatGloss"), input("IOR"), input("Transparency"), input("AnisotropicRotation"));
+}
+
+void DisneyBsdfNode::compile(OSLCompiler& compiler)
+{
+	compiler.add(this, "node_disney_bsdf");
+}
+
+bool DisneyBsdfNode::has_bssrdf_bump()
+{
+	/* detect if anything is plugged into the normal input besides the default */
+	ShaderInput *normal_in = input("Normal");
+	return (normal_in->link && normal_in->link->parent->special_type != SHADER_SPECIAL_TYPE_GEOMETRY);
+}
+
 /* Translucent BSDF Closure */
 
 NODE_DEFINE(TranslucentBsdfNode)
