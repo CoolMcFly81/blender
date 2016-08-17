@@ -361,34 +361,6 @@ public:
 	float roughness;
 };
 
-/* Disney BRDF */
-class DisneyBsdfNode : public ShaderNode {
-public:
-	SHADER_NODE_CLASS(DisneyBsdfNode)
-
-	bool has_spatial_varying() { return true; }
-	bool has_surface_bssrdf() { return true; }
-	bool has_bssrdf_bump();
-	void compile(SVMCompiler& compiler, ShaderInput *metallic, ShaderInput *subsurface,
-		ShaderInput *specular, ShaderInput *roughness, ShaderInput *specularTint, ShaderInput *anisotropic,
-		ShaderInput *sheen, ShaderInput *sheenTint, ShaderInput *clearcoat, ShaderInput *clearcoatGloss,
-		ShaderInput *ior, ShaderInput *transparency, ShaderInput *anisotropicRotation);
-
-	float3 base_color;
-	float3 subsurface_color;
-	float metallic, subsurface, specular, roughness, specularTint, anisotropic,
-		sheen, sheenTint, clearcoat, clearcoatGloss, ior, transparency, anisotropicRotation;
-	float3 normal, clearcoatNormal, tangent;
-	float surface_mix_weight;
-	ClosureType closure;
-
-	virtual bool equals(const ShaderNode * /*other*/)
-	{
-		/* TODO(sergey): With some care BSDF nodes can be de-duplicated. */
-		return false;
-	}
-};
-
 class TranslucentBsdfNode : public BsdfNode {
 public:
 	SHADER_NODE_CLASS(TranslucentBsdfNode)
