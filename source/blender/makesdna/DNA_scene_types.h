@@ -191,6 +191,11 @@ typedef struct SceneRenderLayer {
 	int passflag;			/* pass_xor has to be after passflag */
 	int pass_xor;
 
+	int denoiseflag;
+	int denoise_half_window;
+	float denoise_strength;
+	int pad;
+
 	int samples;
 	float pass_alpha_threshold;
 	
@@ -213,6 +218,19 @@ typedef struct SceneRenderLayer {
 #define SCE_LAY_DISABLE		0x20000
 #define SCE_LAY_ZMASK		0x40000
 #define SCE_LAY_NEG_ZMASK	0x80000
+
+typedef enum SceneDenoiseFlag {
+	SCE_DENOISE_RESULT                = (1 << 0),
+	SCE_DENOISE_PASSES                = (1 << 1),
+	SCE_DENOISE_DIFFDIR               = (1 << 2),
+	SCE_DENOISE_DIFFIND               = (1 << 3),
+	SCE_DENOISE_GLOSSDIR              = (1 << 4),
+	SCE_DENOISE_GLOSSIND              = (1 << 5),
+	SCE_DENOISE_TRANSDIR              = (1 << 6),
+	SCE_DENOISE_TRANSIND              = (1 << 7),
+	SCE_DENOISE_SUBDIR                = (1 << 8),
+	SCE_DENOISE_SUBIND                = (1 << 9),
+} SceneDenoiseFlag;
 
 /* srl->passflag */
 typedef enum ScenePassType {
@@ -249,6 +267,19 @@ typedef enum ScenePassType {
 	SCE_PASS_SUBSURFACE_COLOR         = (1 << 30),
 	SCE_PASS_DEBUG                    = (1 << 31),  /* This is a virtual pass. */
 } ScenePassType;
+
+/* MSVC doesn't like 64-bit enum values. */
+#define SCE_PASS_DENOISE_NORMAL           (((uint64_t) 1) << 32)
+#define SCE_PASS_DENOISE_NORMAL_VAR       (((uint64_t) 1) << 33)
+#define SCE_PASS_DENOISE_ALBEDO           (((uint64_t) 1) << 34)
+#define SCE_PASS_DENOISE_ALBEDO_VAR       (((uint64_t) 1) << 35)
+#define SCE_PASS_DENOISE_DEPTH            (((uint64_t) 1) << 36)
+#define SCE_PASS_DENOISE_DEPTH_VAR        (((uint64_t) 1) << 37)
+#define SCE_PASS_DENOISE_SHADOW_A         (((uint64_t) 1) << 38)
+#define SCE_PASS_DENOISE_SHADOW_B         (((uint64_t) 1) << 39)
+#define SCE_PASS_DENOISE_NOISY            (((uint64_t) 1) << 40) /* The original noisy image (only the components that are denoised). */
+#define SCE_PASS_DENOISE_NOISY_VAR        (((uint64_t) 1) << 41)
+#define SCE_PASS_DENOISE_CLEAN            (((uint64_t) 1) << 42) /* If present, these image components are added to the denoised image. */
 
 /* note, srl->passflag is treestore element 'nr' in outliner, short still... */
 
