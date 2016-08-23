@@ -38,20 +38,13 @@
 #include "util_view.h"
 #endif
 
+#include "cycles_standalone.h"
 #include "cycles_xml.h"
+#include "cycles_denoising.h"
 
 CCL_NAMESPACE_BEGIN
 
-struct Options {
-	Session *session;
-	Scene *scene;
-	string filepath;
-	int width, height;
-	SceneParams scene_params;
-	SessionParams session_params;
-	bool quiet;
-	bool show_help, interactive, pause;
-} options;
+Options options;
 
 static void session_print(const string& str)
 {
@@ -70,7 +63,7 @@ static void session_print(const string& str)
 	fflush(stdout);
 }
 
-static void session_print_status()
+void session_print_status()
 {
 	int sample, tile;
 	double total_time, sample_time, render_time;
@@ -123,7 +116,7 @@ static void scene_init()
 	options.scene = new Scene(options.scene_params, options.session_params.device);
 
 	/* Read XML */
-	xml_read_file(options.scene, options.filepath.c_str());
+	xml_read_file(options.scene, options.filepaths[0].c_str());
 
 	/* Camera width/height override? */
 	if(!(options.width == 0 || options.height == 0)) {
@@ -322,7 +315,7 @@ static void keyboard(unsigned char key)
 static int files_parse(int argc, const char *argv[])
 {
 	if(argc > 0)
-		options.filepath = argv[0];
+		options.filepaths.push_back(string(argv[0]));
 
 	return 0;
 }
@@ -331,9 +324,11 @@ static void options_parse(int argc, const char **argv)
 {
 	options.width = 0;
 	options.height = 0;
-	options.filepath = "";
+	options.filepaths.clear();
 	options.session = NULL;
 	options.quiet = false;
+	options.frame_range.x = -1;
+	options.frame_range.y = -2;
 
 	/* device names */
 	string device_names = "";
@@ -359,7 +354,7 @@ static void options_parse(int argc, const char **argv)
 
 	/* parse options */
 	ArgParse ap;
-	bool help = false, debug = false, version = false;
+	bool help = false, debug = false, version = false, denoise = false;
 	int verbosity = 1;
 
 	ap.options ("Usage: cycles [options] file.xml",
@@ -370,8 +365,13 @@ static void options_parse(int argc, const char **argv)
 #endif
 		"--background", &options.session_params.background, "Render in background, without user interface",
 		"--quiet", &options.quiet, "In background mode, don't print progress messages",
+		"--denoise", &denoise, "Denoise the given input file instead of rendering it",
+		"--half-window %d", &options.session_params.half_window, "Size of the denoising window",
+		"--denoise-frame %d", &options.session_params.prev_frames, "Which frame to denoise (together with --frame-range)",
+		"--frame-range %d %d", &options.frame_range.x, &options.frame_range.y, "Frame Range that's used for denoising",
 		"--samples %d", &options.session_params.samples, "Number of samples to render",
 		"--output %s", &options.session_params.output_path, "File path to write output image",
+		"--output-half", &options.session_params.output_half_float, "Write output image in half float format",
 		"--threads %d", &options.session_params.threads, "CPU Rendering Threads",
 		"--width  %d", &options.width, "Window width in pixel",
 		"--height %d", &options.height, "Window height in pixel",
@@ -414,7 +414,7 @@ static void options_parse(int argc, const char **argv)
 		printf("%s\n", CYCLES_VERSION_STRING);
 		exit(EXIT_SUCCESS);
 	}
-	else if(help || options.filepath == "") {
+	else if(help || options.filepaths.size() == 0) {
 		ap.usage();
 		exit(EXIT_SUCCESS);
 	}
@@ -451,11 +451,11 @@ static void options_parse(int argc, const char **argv)
 		exit(EXIT_FAILURE);
 	}
 #ifdef WITH_OSL
-	else if(!(ssname == "osl" || ssname == "svm")) {
+	else if(!denoise && !(ssname == "osl" || ssname == "svm")) {
 		fprintf(stderr, "Unknown shading system: %s\n", ssname.c_str());
 		exit(EXIT_FAILURE);
 	}
-	else if(options.scene_params.shadingsystem == SHADINGSYSTEM_OSL && options.session_params.device.type != DEVICE_CPU) {
+	else if(!denoise && (options.scene_params.shadingsystem == SHADINGSYSTEM_OSL && options.session_params.device.type != DEVICE_CPU)) {
 		fprintf(stderr, "OSL shading system only works with CPU device\n");
 		exit(EXIT_FAILURE);
 	}
@@ -464,13 +464,18 @@ static void options_parse(int argc, const char **argv)
 		fprintf(stderr, "Invalid number of samples: %d\n", options.session_params.samples);
 		exit(EXIT_FAILURE);
 	}
-	else if(options.filepath == "") {
+	else if(options.filepaths.size() == 0) {
 		fprintf(stderr, "No file path specified\n");
 		exit(EXIT_FAILURE);
 	}
 
 	/* For smoother Viewport */
 	options.session_params.start_resolution = 64;
+
+	if(denoise) {
+		bool success = cycles_denoising_session();
+		exit(success? EXIT_SUCCESS: EXIT_FAILURE);
+	}
 
 	/* load scene */
 	scene_init();
@@ -495,7 +500,7 @@ int main(int argc, const char **argv)
 #ifdef WITH_CYCLES_STANDALONE_GUI
 	}
 	else {
-		string title = "Cycles: " + path_filename(options.filepath);
+		string title = "Cycles: " + path_filename(options.filepaths[0]);
 
 		/* init/exit are callback so they run while GL is initialized */
 		view_main_loop(title.c_str(), options.width, options.height,
