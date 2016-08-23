@@ -282,30 +282,29 @@ enum SamplingPattern {
 /* these flags values correspond to raytypes in osl.cpp, so keep them in sync! */
 
 enum PathRayFlag {
-	PATH_RAY_CAMERA              = (1 << 0),
-	PATH_RAY_REFLECT             = (1 << 1),
-	PATH_RAY_TRANSMIT            = (1 << 2),
-	PATH_RAY_DIFFUSE             = (1 << 3),
-	PATH_RAY_GLOSSY              = (1 << 4),
-	PATH_RAY_SINGULAR            = (1 << 5),
-	PATH_RAY_TRANSPARENT         = (1 << 6),
+	PATH_RAY_CAMERA = 1,
+	PATH_RAY_REFLECT = 2,
+	PATH_RAY_TRANSMIT = 4,
+	PATH_RAY_DIFFUSE = 8,
+	PATH_RAY_GLOSSY = 16,
+	PATH_RAY_SINGULAR = 32,
+	PATH_RAY_TRANSPARENT = 64,
 
-	PATH_RAY_SHADOW_OPAQUE       = (1 << 7),
-	PATH_RAY_SHADOW_TRANSPARENT  = (1 << 8),
+	PATH_RAY_SHADOW_OPAQUE = 128,
+	PATH_RAY_SHADOW_TRANSPARENT = 256,
 	PATH_RAY_SHADOW = (PATH_RAY_SHADOW_OPAQUE|PATH_RAY_SHADOW_TRANSPARENT),
 
-	PATH_RAY_CURVE               = (1 << 9), /* visibility flag to define curve segments */
-	PATH_RAY_VOLUME_SCATTER      = (1 << 10), /* volume scattering */
+	PATH_RAY_CURVE = 512, /* visibility flag to define curve segments */
+	PATH_RAY_VOLUME_SCATTER = 1024, /* volume scattering */
 
 	/* Special flag to tag unaligned BVH nodes. */
-	PATH_RAY_NODE_UNALIGNED = (1 << 11),
+	PATH_RAY_NODE_UNALIGNED = 2048,
 
-	PATH_RAY_ALL_VISIBILITY = ((1 << 12)-1),
+	PATH_RAY_ALL_VISIBILITY = (1|2|4|8|16|32|64|128|256|512|1024|2048),
 
-	PATH_RAY_MIS_SKIP            = (1 << 12),
-	PATH_RAY_DIFFUSE_ANCESTOR    = (1 << 13),
-	PATH_RAY_SINGLE_PASS_DONE    = (1 << 14),
-	PATH_RAY_DENOISING_PASS_DONE = (1 << 15),
+	PATH_RAY_MIS_SKIP = 4096,
+	PATH_RAY_DIFFUSE_ANCESTOR = 8192,
+	PATH_RAY_SINGLE_PASS_DONE = 16384,
 };
 
 /* Closure Label */
@@ -393,27 +392,6 @@ typedef enum BakePassFilterCombos {
 	BAKE_FILTER_SUBSURFACE_INDIRECT = (BAKE_FILTER_INDIRECT | BAKE_FILTER_SUBSURFACE),
 } BakePassFilterCombos;
 
-typedef enum DenoiseFlag {
-	DENOISE_DIFFUSE_DIR      = (1 << 0),
-	DENOISE_DIFFUSE_IND      = (1 << 1),
-	DENOISE_GLOSSY_DIR       = (1 << 2),
-	DENOISE_GLOSSY_IND       = (1 << 3),
-	DENOISE_TRANSMISSION_DIR = (1 << 4),
-	DENOISE_TRANSMISSION_IND = (1 << 5),
-	DENOISE_SUBSURFACE_DIR   = (1 << 6),
-	DENOISE_SUBSURFACE_IND   = (1 << 7),
-
-	DENOISE_ALL = (
-	    DENOISE_DIFFUSE_DIR |
-	    DENOISE_DIFFUSE_IND |
-	    DENOISE_GLOSSY_DIR |
-	    DENOISE_GLOSSY_IND |
-	    DENOISE_TRANSMISSION_DIR |
-	    DENOISE_TRANSMISSION_IND |
-	    DENOISE_SUBSURFACE_DIR |
-	    DENOISE_SUBSURFACE_IND),
-} DenoiseFlag;
-
 typedef ccl_addr_space struct PathRadiance {
 #ifdef __PASSES__
 	int use_light_pass;
@@ -454,7 +432,6 @@ typedef ccl_addr_space struct PathRadiance {
 
 	float4 shadow;
 	float mist;
-	float transparent;
 #endif
 } PathRadiance;
 
@@ -690,13 +667,12 @@ typedef struct AttributeDescriptor {
 #define SHADER_CLOSURE_BASE \
 	float3 weight; \
 	ClosureType type; \
-	float sample_weight; \
-	float3 N
+	float sample_weight \
 
 typedef ccl_addr_space struct ccl_align(16) ShaderClosure {
 	SHADER_CLOSURE_BASE;
 
-	float data[10]; /* pad to 80 bytes */
+	float data[14]; /* pad to 80 bytes */
 } ShaderClosure;
 
 /* Shader Context
@@ -889,7 +865,6 @@ typedef struct PathState {
 	int glossy_bounce;
 	int transmission_bounce;
 	int transparent_bounce;
-	float path_length;
 
 	/* multiple importance sampling */
 	float min_ray_pdf; /* smallest bounce pdf over entire path up to now */
@@ -1064,16 +1039,6 @@ typedef struct KernelFilm {
 	float mist_inv_depth;
 	float mist_falloff;
 
-	int pass_denoising;
-	int pass_no_denoising;
-	int denoise_flag;
-	int frames;
-
-	int num_frames;
-	int prev_frames;
-	int pass_pad1;
-	int pass_pad4;
-
 #ifdef __KERNEL_DEBUG__
 	int pass_bvh_traversal_steps;
 	int pass_bvh_traversed_instances;
@@ -1163,9 +1128,8 @@ typedef struct KernelIntegrator {
 	float volume_step_size;
 	int volume_samples;
 
-	/* denoiser */
-	int half_window;
-	float filter_strength;
+	int pad1;
+	int pad2;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
@@ -1308,45 +1272,6 @@ enum RayState {
 #define PATCH_MAP_NODE_IS_SET (1 << 30)
 #define PATCH_MAP_NODE_IS_LEAF (1u << 31)
 #define PATCH_MAP_NODE_INDEX_MASK (~(PATCH_MAP_NODE_IS_SET | PATCH_MAP_NODE_IS_LEAF))
-
-/* Enabling second-order screen features will preserve shadow edges better, but currently may cause artifacts in smooth areas. */
-#undef DENOISE_SECOND_ORDER_SCREEN
-#define DENOISE_TEMPORAL
-#ifdef DENOISE_SECOND_ORDER_SCREEN
-#define DENOISE_FEATURES 13 /* The amount of denoising features: Normal, Albedo, Depth, Shadow and screen position (x, y, x^2, y^2, x*y) */
-#elif defined(DENOISE_TEMPORAL)
-#define DENOISE_FEATURES 11 /* The amount of denoising features: Normal, Albedo, Depth, Shadow, screen position (x, y) and frame*/
-#else
-#define DENOISE_FEATURES 10 /* The amount of denoising features: Normal, Albedo, Depth, Shadow and screen position (x, y)*/
-#endif
-
-typedef struct FilterStorage {
-	float transform[DENOISE_FEATURES*DENOISE_FEATURES];
-	float bandwidth[DENOISE_FEATURES];
-	int rank;
-	float global_bandwidth;
-#ifdef WITH_CYCLES_DEBUG_FILTER
-	float filtered_global_bandwidth;
-	float sum_weight;
-	float means[DENOISE_FEATURES], scales[DENOISE_FEATURES], singular[DENOISE_FEATURES];
-	float singular_threshold, feature_matrix_norm;
-	float log_rmse_per_sample;
-#endif
-} FilterStorage;
-
-typedef struct CUDAFilterStorage {
-	float bandwidth[DENOISE_FEATURES];
-	int rank;
-	float global_bandwidth;
-	float est_bias[6], est_variance[6];
-#ifdef WITH_CYCLES_DEBUG_FILTER
-	float filtered_global_bandwidth;
-	float sum_weight;
-	float means[DENOISE_FEATURES], scales[DENOISE_FEATURES], singular[DENOISE_FEATURES];
-	float singular_threshold, feature_matrix_norm;
-	float log_rmse_per_sample;
-#endif
-} CUDAFilterStorage;
 
 CCL_NAMESPACE_END
 

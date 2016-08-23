@@ -2014,10 +2014,6 @@ SceneRenderLayer *BKE_scene_add_render_layer(Scene *sce, const char *name)
 	srl->layflag = 0x7FFF;   /* solid ztra halo edge strand */
 	srl->passflag = SCE_PASS_COMBINED | SCE_PASS_Z;
 	srl->pass_alpha_threshold = 0.5f;
-	srl->denoiseflag = SCE_DENOISE_DIFFDIR|SCE_DENOISE_GLOSSDIR|SCE_DENOISE_TRANSDIR|SCE_DENOISE_SUBDIR|
-                           SCE_DENOISE_DIFFIND|SCE_DENOISE_GLOSSIND|SCE_DENOISE_TRANSIND|SCE_DENOISE_SUBIND;
-	srl->denoise_half_window = 8;
-	srl->denoise_strength = 0.0f;
 	BKE_freestyle_config_init(&srl->freestyleConfig);
 
 	return srl;
@@ -2187,12 +2183,6 @@ bool BKE_scene_use_spherical_stereo(Scene *scene)
 {
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
 	return (type && type->flag & RE_USE_SPHERICAL_STEREO);
-}
-
-bool BKE_scene_use_result_postprocess(Scene *scene)
-{
-	RenderEngineType *type = RE_engines_find(scene->r.engine);
-	return (type && type->flag & RE_USE_RESULT_POSTPROCESS);
 }
 
 bool BKE_scene_uses_blender_internal(const  Scene *scene)

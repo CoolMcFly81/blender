@@ -22,6 +22,7 @@ CCL_NAMESPACE_BEGIN
 typedef ccl_addr_space struct OrenNayarBsdf {
 	SHADER_CLOSURE_BASE;
 
+	float3 N;
 	float roughness;
 	float a;
 	float b;
