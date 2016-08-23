@@ -80,9 +80,6 @@ public:
 
 	bool need_update;
 
-	int half_window;
-	float filter_strength;
-
 	Integrator();
 	~Integrator();
 
