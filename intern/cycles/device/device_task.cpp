@@ -19,6 +19,8 @@
 
 #include "device_task.h"
 
+#include "buffers.h"
+
 #include "util_algorithm.h"
 #include "util_time.h"
 
@@ -54,7 +56,7 @@ int DeviceTask::get_subtask_count(int num, int max_size)
 	if(type == SHADER) {
 		num = min(shader_w, num);
 	}
-	else if(type == PATH_TRACE) {
+	else if(type == RENDER) {
 	}
 	else {
 		num = min(h, num);
@@ -80,7 +82,7 @@ void DeviceTask::split(list<DeviceTask>& tasks, int num, int max_size)
 			tasks.push_back(task);
 		}
 	}
-	else if(type == PATH_TRACE) {
+	else if(type == RENDER) {
 		for(int i = 0; i < num; i++)
 			tasks.push_back(*this);
 	}
@@ -101,12 +103,20 @@ void DeviceTask::split(list<DeviceTask>& tasks, int num, int max_size)
 
 void DeviceTask::update_progress(RenderTile *rtile)
 {
-	if((type != PATH_TRACE) &&
+	if((type != RENDER) &&
 	   (type != SHADER))
 		return;
 
-	if(update_progress_sample)
-		update_progress_sample();
+	if(update_progress_sample) {
+		int pixel_samples;
+		if(type == RENDER) {
+			pixel_samples = rtile->w * rtile->h;
+		}
+		else {
+			pixel_samples = shader_w;
+		}
+		update_progress_sample(pixel_samples, rtile? rtile->sample : 0);
+	}
 
 	if(update_tile_sample) {
 		double current_time = time_dt();

@@ -67,6 +67,10 @@ public:
 	                      ExtensionType extension);
 	ImageDataType get_image_metadata(const string& filename, void *builtin_data, bool& is_linear);
 
+	int add_ies(const string& ies);
+	int add_ies_from_file(const ustring& filename);
+	void remove_ies(int slot);
+
 	void device_update(Device *device, DeviceScene *dscene, Progress& progress);
 	void device_update_slot(Device *device, DeviceScene *dscene, int flat_slot, Progress *progress);
 	void device_free(Device *device, DeviceScene *dscene);
@@ -96,6 +100,23 @@ public:
 		int users;
 	};
 
+	class IESLight {
+	public:
+		IESLight(const string& ies);
+		IESLight();
+		~IESLight();
+		bool parse();
+		bool process();
+
+		string ies;
+		uint hash;
+		int users;
+
+		int v_angles_num, h_angles_num;
+		vector<float> v_angles, h_angles;
+		vector<float*> intensity;
+	};
+
 private:
 	int tex_num_images[IMAGE_DATA_NUM_TYPES];
 	int tex_start_images[IMAGE_DATA_NUM_TYPES];
@@ -104,6 +125,7 @@ private:
 	int animation_frame;
 
 	vector<Image*> images[IMAGE_DATA_NUM_TYPES];
+	vector<IESLight*> ies_lights;
 	void *osl_texture_system;
 	bool pack_images;
 
@@ -128,6 +150,7 @@ private:
 	void device_free_image(Device *device, DeviceScene *dscene, ImageDataType type, int slot);
 
 	void device_pack_images(Device *device, DeviceScene *dscene, Progress& progess);
+	void device_update_ies(Device *device, DeviceScene *dscene);
 };
 
 CCL_NAMESPACE_END

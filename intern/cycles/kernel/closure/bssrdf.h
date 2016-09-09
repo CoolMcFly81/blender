@@ -27,7 +27,8 @@ typedef ccl_addr_space struct Bssrdf {
 	float d;
 	float texture_blur;
 	float albedo;
-	float3 N;
+	float roughness;
+	float3 baseColor;
 } Bssrdf;
 
 /* Planar Truncated Gaussian
@@ -360,10 +361,22 @@ ccl_device int bssrdf_setup(Bssrdf *bssrdf, ClosureType type)
 {
 	if(bssrdf->radius < BSSRDF_MIN_RADIUS) {
 		/* revert to diffuse BSDF if radius too small */
-		DiffuseBsdf *bsdf = (DiffuseBsdf*)bssrdf;
-		bsdf->N = bssrdf->N;
-		int flag = bsdf_diffuse_setup(bsdf);
-		bsdf->type = CLOSURE_BSDF_BSSRDF_ID;
+		int flag;
+		if (type == CLOSURE_BSSRDF_DISNEY_ID) {
+			DisneyDiffuseBsdf *bsdf = (DisneyDiffuseBsdf*)bssrdf;
+			bsdf->N = bssrdf->N;
+			bsdf->roughness = bssrdf->roughness;
+			bsdf->baseColor = bssrdf->baseColor;
+			flag = bsdf_disney_diffuse_setup(bsdf);
+			bsdf->type = CLOSURE_BSDF_BSSRDF_DISNEY_ID;
+		}
+		else {
+			DiffuseBsdf *bsdf = (DiffuseBsdf*)bssrdf;
+			bsdf->N = bssrdf->N;
+			flag = bsdf_diffuse_setup(bsdf);
+			bsdf->type = CLOSURE_BSDF_BSSRDF_ID;
+		}
+		
 		return flag;
 	}
 	else {
@@ -371,7 +384,7 @@ ccl_device int bssrdf_setup(Bssrdf *bssrdf, ClosureType type)
 		bssrdf->sharpness = saturate(bssrdf->sharpness);
 		bssrdf->type = type;
 
-		if(type == CLOSURE_BSSRDF_BURLEY_ID) {
+		if (type == CLOSURE_BSSRDF_BURLEY_ID || type == CLOSURE_BSSRDF_DISNEY_ID) {
 			bssrdf_burley_setup(bssrdf);
 		}
 
@@ -385,7 +398,7 @@ ccl_device void bssrdf_sample(const ShaderClosure *sc, float xi, float *r, float
 		bssrdf_cubic_sample(sc, xi, r, h);
 	else if(sc->type == CLOSURE_BSSRDF_GAUSSIAN_ID)
 		bssrdf_gaussian_sample(sc, xi, r, h);
-	else /*if(sc->type == CLOSURE_BSSRDF_BURLEY_ID)*/
+	else /*if(sc->type == CLOSURE_BSSRDF_BURLEY_ID || sc->type == CLOSURE_BSSRDF_DISNEY_ID)*/
 		bssrdf_burley_sample(sc, xi, r, h);
 }
 
@@ -395,7 +408,7 @@ ccl_device_inline float bssrdf_pdf(const ShaderClosure *sc, float r)
 		return bssrdf_cubic_pdf(sc, r);
 	else if(sc->type == CLOSURE_BSSRDF_GAUSSIAN_ID)
 		return bssrdf_gaussian_pdf(sc, r);
-	else /*if(sc->type == CLOSURE_BSSRDF_BURLEY_ID)*/
+	else /*if(sc->type == CLOSURE_BSSRDF_BURLEY_ID || sc->type == CLOSURE_BSSRDF_DISNEY_ID)*/
 		return bssrdf_burley_pdf(sc, r);
 }
 

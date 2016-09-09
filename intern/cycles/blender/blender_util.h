@@ -37,6 +37,21 @@ float *BKE_image_get_float_pixels_for_frame(void *image, int frame);
 
 CCL_NAMESPACE_BEGIN
 
+/* TODO Wrap through RNA */
+typedef enum BlenderDenoisePasses {
+	SCE_PASS_DENOISE_NORMAL           = 32,
+	SCE_PASS_DENOISE_NORMAL_VAR       = 33,
+	SCE_PASS_DENOISE_ALBEDO           = 34,
+	SCE_PASS_DENOISE_ALBEDO_VAR       = 35,
+	SCE_PASS_DENOISE_DEPTH            = 36,
+	SCE_PASS_DENOISE_DEPTH_VAR        = 37,
+	SCE_PASS_DENOISE_SHADOW_A         = 38,
+	SCE_PASS_DENOISE_SHADOW_B         = 39,
+	SCE_PASS_DENOISE_NOISY            = 40, /* The original noisy image (only the components that are denoised). */
+	SCE_PASS_DENOISE_NOISY_VAR        = 41,
+	SCE_PASS_DENOISE_CLEAN            = 42, /* If present, these image components are added to the denoised image. */
+} BlenderDenoisePasses;
+
 void python_thread_state_save(void **python_thread_state);
 void python_thread_state_restore(void **python_thread_state);
 
@@ -461,6 +476,19 @@ static inline string blender_absolute_path(BL::BlendData& b_data,
 	}
 
 	return path;
+}
+
+static inline string get_text_content(PointerRNA ptr)
+{
+	if(ptr.data == NULL)
+		return "";
+
+	string content;
+	BL::Text::lines_iterator iter;
+	iter.begin(ptr);
+	for(iter.begin(ptr); iter; ++iter)
+		content += iter->body() + "\n";
+	return content;
 }
 
 /* Texture Space */
