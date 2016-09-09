@@ -166,7 +166,6 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
 
         sub.prop(cscene, "sample_clamp_direct")
         sub.prop(cscene, "sample_clamp_indirect")
-        sub.prop(cscene, "light_sampling_threshold")
 
         if cscene.progressive == 'PATH' or use_branched_path(context) is False:
             col = split.column()
@@ -198,10 +197,7 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "volume_samples", text="Volume")
 
         if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
-            col = layout.row().column()
-            col.prop(cscene, "sampling_pattern", text="Pattern")
-            col.prop(cscene, "scrambling_distance")
-
+            layout.row().prop(cscene, "sampling_pattern", text="Pattern")
 
         for rl in scene.render.layers:
             if rl.samples > 0:
@@ -548,44 +544,6 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
             row.prop(rv, "camera_suffix", text="")
 
 
-class CyclesRender_PT_denoising(CyclesButtonsPanel, Panel):
-    bl_label = "Denoising"
-    bl_context = "render_layer"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw_header(self, context):
-        rd = context.scene.render
-        rl = rd.layers.active
-        self.layout.prop(rl, "denoise_result", text="")
-
-    def draw(self, context):
-        layout = self.layout
-
-        scene = context.scene
-        rd = scene.render
-        rl = rd.layers.active
-
-        col = layout.column()
-
-        col.prop(rl, "keep_denoise_data")
-
-        sub = col.column(align=True)
-        sub.prop(rl, "half_window")
-        sub.prop(rl, "filter_strength", slider=True)
-
-        sub = col.column(align=True)
-        row = sub.row(align=True)
-        row.prop(rl, "denoise_diffuse_direct", toggle=True)
-        row.prop(rl, "denoise_glossy_direct", toggle=True)
-        row.prop(rl, "denoise_transmission_direct", toggle=True)
-        row.prop(rl, "denoise_subsurface_direct", toggle=True)
-        row = sub.row(align=True)
-        row.prop(rl, "denoise_diffuse_indirect", toggle=True)
-        row.prop(rl, "denoise_glossy_indirect", toggle=True)
-        row.prop(rl, "denoise_transmission_indirect", toggle=True)
-        row.prop(rl, "denoise_subsurface_indirect", toggle=True)
-
-
 class Cycles_PT_post_processing(CyclesButtonsPanel, Panel):
     bl_label = "Post Processing"
     bl_options = {'DEFAULT_CLOSED'}
@@ -799,12 +757,9 @@ class CyclesObject_PT_cycles_settings(CyclesButtonsPanel, Panel):
 
         col = layout.column()
         col.label(text="Performance:")
-        flow = layout.column_flow()
-        row = flow.row()
+        row = col.row()
         row.active = scene.render.use_simplify and cscene.use_camera_cull
         row.prop(cob, "use_camera_cull")
-
-        flow.prop(cob, "is_shadow_catcher")
 
 
 class CYCLES_OT_use_shading_nodes(Operator):

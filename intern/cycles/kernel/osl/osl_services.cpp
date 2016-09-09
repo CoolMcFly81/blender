@@ -168,12 +168,6 @@ bool OSLRenderServices::get_matrix(OSL::ShaderGlobals *sg, OSL::Matrix44 &result
 
 			return true;
 		}
-		else if(sd->type == PRIMITIVE_LAMP) {
-			Transform tfm = transform_transpose(sd->ob_tfm);
-			COPY_MATRIX44(&result, &tfm);
-
-			return true;
-		}
 	}
 
 	return false;
@@ -200,12 +194,6 @@ bool OSLRenderServices::get_inverse_matrix(OSL::ShaderGlobals *sg, OSL::Matrix44
 			Transform itfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
 #endif
 			itfm = transform_transpose(itfm);
-			COPY_MATRIX44(&result, &itfm);
-
-			return true;
-		}
-		else if(sd->type == PRIMITIVE_LAMP) {
-			Transform itfm = transform_transpose(sd->ob_itfm);
 			COPY_MATRIX44(&result, &itfm);
 
 			return true;
@@ -299,12 +287,6 @@ bool OSLRenderServices::get_matrix(OSL::ShaderGlobals *sg, OSL::Matrix44 &result
 
 			return true;
 		}
-		else if(sd->type == PRIMITIVE_LAMP) {
-			Transform tfm = transform_transpose(sd->ob_tfm);
-			COPY_MATRIX44(&result, &tfm);
-
-			return true;
-		}
 	}
 
 	return false;
@@ -327,12 +309,6 @@ bool OSLRenderServices::get_inverse_matrix(OSL::ShaderGlobals *sg, OSL::Matrix44
 #endif
 			tfm = transform_transpose(tfm);
 			COPY_MATRIX44(&result, &tfm);
-
-			return true;
-		}
-		else if(sd->type == PRIMITIVE_LAMP) {
-			Transform itfm = transform_transpose(sd->ob_itfm);
-			COPY_MATRIX44(&result, &itfm);
 
 			return true;
 		}
@@ -939,8 +915,8 @@ bool OSLRenderServices::texture(ustring filename,
 #endif
 	bool status;
 
-	if((filename.length() >= 2) && filename[0] == '@' && filename[1] == 'i') {
-		int slot = atoi(filename.c_str() + 2);
+	if(filename.length() && filename[0] == '@') {
+		int slot = atoi(filename.c_str() + 1);
 		float4 rgba = kernel_tex_image_interp(slot, s, 1.0f - t);
 
 		result[0] = rgba[0];
@@ -950,11 +926,6 @@ bool OSLRenderServices::texture(ustring filename,
 			result[2] = rgba[2];
 		if(nchannels > 3)
 			result[3] = rgba[3];
-		status = true;
-	}
-	else if((filename.length() >= 2) && filename[0] == '@' && filename[1] == 'l') {
-		int slot = atoi(filename.c_str() + 2);
-		result[0] = kernel_ies_interp(kg, slot, s, t);
 		status = true;
 	}
 	else {
