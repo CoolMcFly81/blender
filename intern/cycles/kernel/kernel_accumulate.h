@@ -102,7 +102,7 @@ ccl_device_inline bool bsdf_eval_is_zero(BsdfEval *eval)
 #endif
 }
 
-ccl_device_inline void bsdf_eval_mul(BsdfEval *eval, float value)
+ccl_device_inline void bsdf_eval_mul(BsdfEval *eval, float3 value)
 {
 #ifdef __PASSES__
 	if(eval->use_light_pass) {
@@ -120,37 +120,6 @@ ccl_device_inline void bsdf_eval_mul(BsdfEval *eval, float value)
 	eval->diffuse *= value;
 #endif
 }
-
-ccl_device_inline void bsdf_eval_mul3(BsdfEval *eval, float3 value)
-{
-#ifdef __PASSES__
-	if(eval->use_light_pass) {
-		eval->diffuse *= value;
-		eval->glossy *= value;
-		eval->transmission *= value;
-		eval->subsurface *= value;
-		eval->scatter *= value;
-
-		/* skipping transparent, this function is used by for eval(), will be zero then */
-	}
-	else
-#endif
-	eval->diffuse *= value;
-}
-
-ccl_device_inline float3 bsdf_eval_sum(const BsdfEval *eval)
-{
-#ifdef __PASSES__
-	if(eval->use_light_pass) {
-		return eval->diffuse + eval->glossy + eval->transmission + eval->transparent + eval->subsurface + eval->scatter;
-	}
-	else
-#endif
-	return eval->diffuse;
-}
-
-
-
 
 /* Path Radiance
  *
@@ -205,11 +174,6 @@ ccl_device_inline void path_radiance_init(PathRadiance *L, int use_light_pass)
 #else
 	L->emission = make_float3(0.0f, 0.0f, 0.0f);
 #endif
-
-#ifdef __SHADOW_TRICKS__
-	L->path_total = make_float3(0.0f, 0.0f, 0.0f);
-	L->path_total_shaded = make_float3(0.0f, 0.0f, 0.0f);
-#endif
 }
 
 ccl_device_inline void path_radiance_bsdf_bounce(PathRadiance *L, ccl_addr_space float3 *throughput,
@@ -234,10 +198,9 @@ ccl_device_inline void path_radiance_bsdf_bounce(PathRadiance *L, ccl_addr_space
 			L->direct_throughput = *throughput;
 		}
 		else {
-			/* Transparent bounce before first hit,
-			 * or indirectly visible through BSDF/
-			 */
-			float3 sum = bsdf_eval_sum(bsdf_eval) * inverse_pdf;
+			/* transparent bounce before first hit, or indirectly visible through BSDF */
+			float3 sum = (bsdf_eval->diffuse + bsdf_eval->glossy + bsdf_eval->transmission + bsdf_eval->transparent +
+						  bsdf_eval->subsurface + bsdf_eval->scatter) * inverse_pdf;
 			*throughput *= sum;
 		}
 	}
@@ -266,12 +229,7 @@ ccl_device_inline void path_radiance_accum_emission(PathRadiance *L, float3 thro
 #endif
 }
 
-ccl_device_inline void path_radiance_accum_ao(PathRadiance *L,
-                                              float3 throughput,
-                                              float3 alpha,
-                                              float3 bsdf,
-                                              float3 ao,
-                                              int bounce)
+ccl_device_inline void path_radiance_accum_ao(PathRadiance *L, float3 throughput, float3 alpha, float3 bsdf, float3 ao, int bounce)
 {
 #ifdef __PASSES__
 	if(L->use_light_pass) {
@@ -289,26 +247,6 @@ ccl_device_inline void path_radiance_accum_ao(PathRadiance *L,
 		L->emission += throughput*bsdf*ao;
 #else
 	L->emission += throughput*bsdf*ao;
-#endif
-
-#ifdef __SHADOW_TRICKS__
-	float3 light = throughput * bsdf;
-	L->path_total += light;
-	L->path_total_shaded += ao * light;
-#endif
-}
-
-ccl_device_inline void path_radiance_accum_total_ao(
-        PathRadiance *L,
-        float3 throughput,
-        float3 bsdf)
-{
-#ifdef __SHADOW_TRICKS__
-	L->path_total += throughput * bsdf;
-#else
-	(void) L;
-	(void) throughput;
-	(void) bsdf;
 #endif
 }
 
@@ -331,8 +269,8 @@ ccl_device_inline void path_radiance_accum_light(PathRadiance *L, float3 through
 			}
 		}
 		else {
-			/* Indirectly visible lighting after BSDF bounce. */
-			float3 sum = bsdf_eval_sum(bsdf_eval);
+			/* indirectly visible lighting after BSDF bounce */
+			float3 sum = bsdf_eval->diffuse + bsdf_eval->glossy + bsdf_eval->transmission + bsdf_eval->subsurface + bsdf_eval->scatter;
 			L->indirect += throughput*sum*shadow;
 		}
 	}
@@ -340,26 +278,6 @@ ccl_device_inline void path_radiance_accum_light(PathRadiance *L, float3 through
 		L->emission += throughput*bsdf_eval->diffuse*shadow;
 #else
 	L->emission += throughput*bsdf_eval->diffuse*shadow;
-#endif
-
-#ifdef __SHADOW_TRICKS__
-	float3 light = throughput * bsdf_eval_sum(bsdf_eval);
-	L->path_total += light;
-	L->path_total_shaded += shadow * light;
-#endif
-}
-
-ccl_device_inline void path_radiance_accum_total_light(
-        PathRadiance *L,
-        float3 throughput,
-        const BsdfEval *bsdf_eval)
-{
-#ifdef __SHADOW_TRICKS__
-	L->path_total += throughput * bsdf_eval_sum(bsdf_eval);
-#else
-	(void) L;
-	(void) throughput;
-	(void) bsdf_eval;
 #endif
 }
 
@@ -378,16 +296,6 @@ ccl_device_inline void path_radiance_accum_background(PathRadiance *L, float3 th
 		L->emission += throughput*value;
 #else
 	L->emission += throughput*value;
-#endif
-
-#ifdef __SHADOW_TRICKS__
-	if(bounce == 1) {
-		L->path_total += throughput * value;
-		L->path_total_shaded += throughput * value;
-	}
-	else if(bounce > 1) {
-		L->path_total += throughput * value;
-	}
 #endif
 }
 
@@ -546,29 +454,6 @@ ccl_device_inline float3 path_radiance_clamp_and_sum(KernelGlobals *kg, PathRadi
 	return L_sum;
 }
 
-ccl_device_inline void path_radiance_split_denoising(KernelGlobals *kg, PathRadiance *L, float3 *noisy, float3 *clean)
-{
-#ifdef __PASSES__
-	kernel_assert(L->use_light_pass);
-
-	*clean = L->emission + L->background;
-	*noisy = L->direct_scatter + L->indirect_scatter;
-
-	/* TODO Clean this up */
-	*((kernel_data.film.denoise_flag & DENOISE_DIFFUSE_DIR)? noisy: clean) += L->direct_diffuse;
-	*((kernel_data.film.denoise_flag & DENOISE_DIFFUSE_IND)? noisy: clean) += L->indirect_diffuse;
-	*((kernel_data.film.denoise_flag & DENOISE_GLOSSY_DIR)? noisy: clean) += L->direct_glossy;
-	*((kernel_data.film.denoise_flag & DENOISE_GLOSSY_IND)? noisy: clean) += L->indirect_glossy;
-	*((kernel_data.film.denoise_flag & DENOISE_TRANSMISSION_DIR)? noisy: clean) += L->direct_transmission;
-	*((kernel_data.film.denoise_flag & DENOISE_TRANSMISSION_IND)? noisy: clean) += L->indirect_transmission;
-	*((kernel_data.film.denoise_flag & DENOISE_SUBSURFACE_DIR)? noisy: clean) += L->direct_subsurface;
-	*((kernel_data.film.denoise_flag & DENOISE_SUBSURFACE_IND)? noisy: clean) += L->indirect_subsurface;
-#else
-	*noisy = *L;
-	*clean = make_float3(0.0f, 0.0f, 0.0f);
-#endif
-}
-
 ccl_device_inline void path_radiance_accum_sample(PathRadiance *L, PathRadiance *L_sample, int num_samples)
 {
 	float fac = 1.0f/num_samples;
@@ -595,18 +480,6 @@ ccl_device_inline void path_radiance_accum_sample(PathRadiance *L, PathRadiance 
 	L->emission += L_sample->emission * fac;
 #endif
 }
-
-#ifdef __SHADOW_TRICKS__
-ccl_device_inline float path_radiance_sum_shadow(const PathRadiance *L)
-{
-	float path_total = average(L->path_total);
-	float path_total_shaded = average(L->path_total_shaded);
-	if(path_total != 0.0f) {
-		return path_total_shaded / path_total;
-	}
-	return 1.0f;
-}
-#endif
 
 CCL_NAMESPACE_END
 

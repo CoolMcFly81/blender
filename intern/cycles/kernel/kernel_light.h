@@ -102,7 +102,7 @@ ccl_device_inline float area_light_sample(float3 P,
 		float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
 		cu = clamp(cu, -1.0f, 1.0f);
 		/* Compute xu. */
-		float xu = -(cu * z0) / max(sqrtf(1.0f - cu * cu), 1e-7f);
+		float xu = -(cu * z0) / sqrtf(1.0f - cu * cu);
 		xu = clamp(xu, x0, x1);
 		/* Compute yv. */
 		float z0sq = z0 * z0;
@@ -510,7 +510,7 @@ ccl_device float lamp_light_pdf(KernelGlobals *kg, const float3 Ng, const float3
 	return t*t/cos_pi;
 }
 
-ccl_device_inline bool lamp_light_sample(KernelGlobals *kg,
+ccl_device_inline void lamp_light_sample(KernelGlobals *kg,
                                          int lamp,
                                          float randu, float randv,
                                          float3 P,
@@ -581,9 +581,6 @@ ccl_device_inline bool lamp_light_sample(KernelGlobals *kg,
 				/* spot light attenuation */
 				float4 data2 = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 2);
 				ls->eval_fac *= spot_light_attenuation(data1, data2, ls);
-				if(ls->eval_fac == 0.0f) {
-					return false;
-				}
 			}
 			ls->pdf *= lamp_light_pdf(kg, ls->Ng, -ls->D, ls->t);
 		}
@@ -596,10 +593,6 @@ ccl_device_inline bool lamp_light_sample(KernelGlobals *kg,
 			float3 axisv = make_float3(data2.y, data2.z, data2.w);
 			float3 D = make_float3(data3.y, data3.z, data3.w);
 
-			if(dot(ls->P - P, D) > 0.0f) {
-				return false;
-			}
-
 			ls->pdf = area_light_sample(P, &ls->P,
 			                          axisu, axisv,
 			                          randu, randv,
@@ -610,12 +603,13 @@ ccl_device_inline bool lamp_light_sample(KernelGlobals *kg,
 
 			float invarea = data2.x;
 			ls->eval_fac = 0.25f*invarea;
+
+			if(dot(ls->D, D) > 0.0f)
+				ls->pdf = 0.0f;
 		}
 
 		ls->eval_fac *= kernel_data.integrator.inv_pdf_lights;
 	}
-
-	return (ls->pdf > 0.0f);
 }
 
 ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D, float t, LightSample *ls)
@@ -842,7 +836,7 @@ ccl_device bool light_select_reached_max_bounces(KernelGlobals *kg, int index, i
 	return (bounce > __float_as_int(data4.x));
 }
 
-ccl_device_noinline bool light_sample(KernelGlobals *kg,
+ccl_device_noinline void light_sample(KernelGlobals *kg,
                                       float randt,
                                       float randu,
                                       float randv,
@@ -863,20 +857,21 @@ ccl_device_noinline bool light_sample(KernelGlobals *kg,
 		int shader_flag = __float_as_int(l.z);
 
 		triangle_light_sample(kg, prim, object, randu, randv, time, ls);
+
 		/* compute incoming direction, distance and pdf */
 		ls->D = normalize_len(ls->P - P, &ls->t);
 		ls->pdf = triangle_light_pdf(kg, ls->Ng, -ls->D, ls->t);
 		ls->shader |= shader_flag;
-		return true;
 	}
 	else {
 		int lamp = -prim-1;
 
 		if(UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-			return false;
+			ls->pdf = 0.0f;
+			return;
 		}
 
-		return lamp_light_sample(kg, lamp, randu, randv, P, ls);
+		lamp_light_sample(kg, lamp, randu, randv, P, ls);
 	}
 }
 

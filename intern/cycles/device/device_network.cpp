@@ -51,11 +51,6 @@ public:
 
 	thread_mutex rpc_lock;
 
-	virtual bool show_samples() const
-	{
-		return false;
-	}
-
 	NetworkDevice(DeviceInfo& info, Stats &stats, const char *address)
 	: Device(info, stats, true), socket(io_service)
 	{

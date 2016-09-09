@@ -35,7 +35,6 @@ set(SRC_OSL
 	node_absorption_volume.osl
 	node_holdout.osl
 	node_hsv.osl
-	node_ies_light.osl
 	node_image_texture.osl
 	node_invert.osl
 	node_layer_weight.osl
@@ -82,7 +81,6 @@ set(SRC_OSL
 	node_wireframe.osl
 	node_hair_bsdf.osl
 	node_uv_map.osl
-    node_disney_bsdf.osl
 	node_rgb_to_bw.osl
 )
 

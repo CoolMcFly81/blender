@@ -190,13 +190,3 @@ def with_network():
 def system_info():
     import _cycles
     return _cycles.system_info()
-
-def can_postprocess(result):
-    import _cycles
-    return _cycles.can_postprocess(result.as_pointer())
-
-def postprocess(engine, scene, result):
-    import bpy
-    import _cycles
-    userpref = bpy.context.user_preferences.as_pointer()
-    _cycles.postprocess(engine.as_pointer(), userpref, scene.as_pointer(), result.as_pointer())

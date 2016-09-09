@@ -154,8 +154,6 @@ void BlenderSync::sync_light(BL::Object& b_parent,
 	light->co = transform_get_column(&tfm, 3);
 	light->dir = -transform_get_column(&tfm, 2);
 
-	light->tfm = tfm;
-
 	/* shader */
 	vector<Shader*> used_shaders;
 	find_shader(b_lamp, used_shaders, scene->default_light);
@@ -389,13 +387,6 @@ Object *BlenderSync::sync_object(BL::Object& b_parent,
 
 	if(visibility != object->visibility) {
 		object->visibility = visibility;
-		object_updated = true;
-	}
-
-	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
-	bool is_shadow_catcher = get_boolean(cobject, "is_shadow_catcher");
-	if(is_shadow_catcher != object->is_shadow_catcher) {
-		object->is_shadow_catcher = is_shadow_catcher;
 		object_updated = true;
 	}
 

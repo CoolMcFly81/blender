@@ -97,7 +97,7 @@ ccl_device_noinline void shader_setup_from_ray(KernelGlobals *kg,
 		
 		/* smooth normal */
 		if(ccl_fetch(sd, shader) & SHADER_SMOOTH_NORMAL)
-			ccl_fetch(sd, N) = triangle_smooth_normal(kg, Ng, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
+			ccl_fetch(sd, N) = triangle_smooth_normal(kg, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
 
 #ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -183,7 +183,7 @@ void shader_setup_from_subsurface(
 		sd->N = Ng;
 
 		if(sd->shader & SHADER_SMOOTH_NORMAL)
-			sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
+			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
 
 #  ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -241,7 +241,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
                                                 const float3 I,
                                                 int shader, int object, int prim,
                                                 float u, float v, float t,
-                                                float time, int lamp)
+                                                float time)
 {
 	/* vectors */
 	ccl_fetch(sd, P) = P;
@@ -249,12 +249,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
 	ccl_fetch(sd, Ng) = Ng;
 	ccl_fetch(sd, I) = I;
 	ccl_fetch(sd, shader) = shader;
-	if(prim != PRIM_NONE)
-		ccl_fetch(sd, type) = PRIMITIVE_TRIANGLE;
-	else if(lamp != LAMP_NONE)
-		ccl_fetch(sd, type) = PRIMITIVE_LAMP;
-	else
-		ccl_fetch(sd, type) = PRIMITIVE_NONE;
+	ccl_fetch(sd, type) = (prim == PRIM_NONE)? PRIMITIVE_NONE: PRIMITIVE_TRIANGLE;
 
 	/* primitive */
 #ifdef __INSTANCING__
@@ -289,18 +284,6 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
 #ifdef __OBJECT_MOTION__
 		shader_setup_object_transforms(kg, sd, time);
 	}
-	else if(lamp != LAMP_NONE) {
-		Transform tfm;
-		tfm.x = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 5);
-		tfm.y = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 6);
-		tfm.z = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 7);
-		tfm.w = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
-		ccl_fetch(sd, ob_tfm) = tfm;
-		tfm.x = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 9);
-		tfm.y = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 10);
-		tfm.z = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 11);
-		ccl_fetch(sd, ob_itfm) = tfm;
-	}
 
 	ccl_fetch(sd, time) = time;
 #else
@@ -310,7 +293,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
 	if(ccl_fetch(sd, type) & PRIMITIVE_TRIANGLE) {
 		/* smooth normal */
 		if(ccl_fetch(sd, shader) & SHADER_SMOOTH_NORMAL) {
-			ccl_fetch(sd, N) = triangle_smooth_normal(kg, Ng, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
+			ccl_fetch(sd, N) = triangle_smooth_normal(kg, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
 
 #ifdef __INSTANCING__
 			if(instanced)
@@ -376,7 +359,7 @@ ccl_device void shader_setup_from_displace(KernelGlobals *kg, ShaderData *sd,
 
 	/* watch out: no instance transform currently */
 
-	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID, LAMP_NONE);
+	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID);
 }
 
 /* ShaderData setup from ray into background */
@@ -580,7 +563,7 @@ void shader_bsdf_eval(KernelGlobals *kg,
 		_shader_bsdf_multi_eval(kg, sd, omega_in, &pdf, -1, eval, 0.0f, 0.0f);
 		if(use_mis) {
 			float weight = power_heuristic(light_pdf, pdf);
-			bsdf_eval_mul(eval, weight);
+			bsdf_eval_mul(eval, make_float3(weight, weight, weight));
 		}
 	}
 }
