@@ -154,7 +154,7 @@ enum {
 	ID_REMAP_IS_USER_ONE_SKIPPED    = 1 << 1,  /* There was some skipped 'user_one' usages of old_id. */
 };
 
-static int foreach_libblock_remap_callback(void *user_data, ID *UNUSED(id_self), ID **id_p, int cb_flag)
+static int foreach_libblock_remap_callback(void *user_data, ID *id_self, ID **id_p, int cb_flag)
 {
 	IDRemap *id_remap_data = user_data;
 	ID *old_id = id_remap_data->old_id;
@@ -212,6 +212,7 @@ static int foreach_libblock_remap_callback(void *user_data, ID *UNUSED(id_self),
 		else {
 			if (!is_never_null) {
 				*id_p = new_id;
+				DAG_id_tag_update(id_self, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 			}
 			if (cb_flag & IDWALK_USER) {
 				id_us_min(old_id);
@@ -875,8 +876,8 @@ void BKE_libblock_delete(Main *bmain, void *idv)
 	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
 
 	/* First tag all datablocks directly from target lib.
-     * Note that we go forward here, since we want to check dependencies before users (e.g. meshes before objects).
-     * Avoids to have to loop twice. */
+	 * Note that we go forward here, since we want to check dependencies before users (e.g. meshes before objects).
+	 * Avoids to have to loop twice. */
 	for (i = 0; i < base_count; i++) {
 		ListBase *lb = lbarray[i];
 		ID *id;

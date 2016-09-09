@@ -177,6 +177,16 @@ LightManager::~LightManager()
 {
 }
 
+bool LightManager::has_background_light(Scene *scene)
+{
+	foreach(Light *light, scene->lights) {
+		if(light->type == LIGHT_BACKGROUND) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void LightManager::disable_ineffective_light(Device *device, Scene *scene)
 {
 	/* Make all lights enabled by default, and perform some preliminary checks
@@ -654,6 +664,11 @@ void LightManager::device_update_points(Device *device,
 			use_light_visibility = true;
 		}
 
+		float3 fixed_emission = make_float3(0.0f, 0.0f, 0.0f);
+		if(shader->is_constant_emission(&fixed_emission)) {
+			shader_id |= SHADER_FIXED_EMISSION;
+		}
+
 		if(light->type == LIGHT_POINT) {
 			shader_id &= ~SHADER_AREA_LIGHT;
 
@@ -667,7 +682,6 @@ void LightManager::device_update_points(Device *device,
 			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, 0.0f);
 			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_DISTANT) {
 			shader_id &= ~SHADER_AREA_LIGHT;
@@ -688,7 +702,6 @@ void LightManager::device_update_points(Device *device,
 			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, cosangle, invarea);
 			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_BACKGROUND) {
 			uint visibility = scene->background->visibility;
@@ -717,7 +730,6 @@ void LightManager::device_update_points(Device *device,
 			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), 0.0f, 0.0f, 0.0f);
 			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_AREA) {
 			float3 axisu = light->axisu*(light->sizeu*light->size);
@@ -735,7 +747,6 @@ void LightManager::device_update_points(Device *device,
 			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), axisu.x, axisu.y, axisu.z);
 			light_data[light_index*LIGHT_SIZE + 2] = make_float4(invarea, axisv.x, axisv.y, axisv.z);
 			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, dir.x, dir.y, dir.z);
-			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_SPOT) {
 			shader_id &= ~SHADER_AREA_LIGHT;
@@ -755,8 +766,9 @@ void LightManager::device_update_points(Device *device,
 			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, spot_angle);
 			light_data[light_index*LIGHT_SIZE + 2] = make_float4(spot_smooth, dir.x, dir.y, dir.z);
 			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
+
+		light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, fixed_emission.x, fixed_emission.y, fixed_emission.z);
 
 		light_index++;
 	}

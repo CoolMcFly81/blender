@@ -24,12 +24,7 @@
 
 #include <cmath>
 
-#ifdef WITH_ALEMBIC_HDF5
-#  include <Alembic/AbcCoreHDF5/All.h>
-#endif
-
-#include <Alembic/AbcCoreOgawa/All.h>
-
+#include "abc_archive.h"
 #include "abc_camera.h"
 #include "abc_curves.h"
 #include "abc_hair.h"
@@ -93,6 +88,9 @@ ExportSettings::ExportSettings()
     , export_ogawa(true)
     , pack_uv(false)
     , do_convert_axis(false)
+    , triangulate(false)
+    , quad_method(0)
+    , ngon_method(0)
 {}
 
 static bool object_is_smoke_sim(Object *ob)
@@ -245,27 +243,8 @@ void AbcExporter::operator()(Main *bmain, float &progress, bool &was_canceled)
 	Alembic::AbcCoreAbstract::MetaData md;
 	md.set("FramesPerTimeUnit", str_fps);
 
-	Alembic::Abc::Argument arg(md);
-
-#ifdef WITH_ALEMBIC_HDF5
-	if (!m_settings.export_ogawa) {
-		m_archive = Alembic::Abc::CreateArchiveWithInfo(Alembic::AbcCoreHDF5::WriteArchive(),
-		                                                m_filename,
-		                                                "Blender",
-		                                                scene_name,
-		                                                Alembic::Abc::ErrorHandler::kThrowPolicy,
-		                                                arg);
-	}
-	else
-#endif
-	{
-		m_archive = Alembic::Abc::CreateArchiveWithInfo(Alembic::AbcCoreOgawa::WriteArchive(),
-		                                                m_filename,
-		                                                "Blender",
-		                                                scene_name,
-		                                                Alembic::Abc::ErrorHandler::kThrowPolicy,
-		                                                arg);
-	}
+	ArchiveWriter writer(m_filename, scene_name.c_str(), m_settings.export_ogawa, md);
+	m_archive = writer.archive();
 
 	/* Create time samplings for transforms and shapes. */
 
