@@ -27,6 +27,10 @@
 #include "../closure/bsdf_ashikhmin_shirley.h"
 #include "../closure/bsdf_toon.h"
 #include "../closure/bsdf_hair.h"
+#include "../closure/bsdf_disney_diffuse.h"
+#include "../closure/bsdf_disney_sheen.h"
+#include "../closure/bsdf_disney_specular.h"
+#include "../closure/bsdf_disney_clearcoat.h"
 #ifdef __SUBSURFACE__
 #  include "../closure/bssrdf.h"
 #endif
@@ -91,6 +95,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals *kg,
 			label = bsdf_microfacet_ggx_sample(kg, sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
 				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
 			break;
+		case CLOSURE_BSDF_MICROFACET_MULTI_GGX_REFRACTION_ID:
 		case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
 			label = bsdf_microfacet_multi_ggx_sample(kg, sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
 			        eval, omega_in,  &domega_in->dx, &domega_in->dy, pdf, &ccl_fetch(sd, lcg_state));
@@ -128,6 +133,23 @@ ccl_device_inline int bsdf_sample(KernelGlobals *kg,
 			break;
 		case CLOSURE_BSDF_HAIR_TRANSMISSION_ID:
 			label = bsdf_hair_transmission_sample(sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
+				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
+			break;
+		case CLOSURE_BSDF_DISNEY_DIFFUSE_ID:
+		case CLOSURE_BSDF_BSSRDF_DISNEY_ID:
+			label = bsdf_disney_diffuse_sample(sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
+				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
+			break;
+		case CLOSURE_BSDF_DISNEY_SHEEN_ID:
+			label = bsdf_disney_sheen_sample(sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
+				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
+			break;
+		/*case CLOSURE_BSDF_DISNEY_SPECULAR_ID:
+			label = bsdf_disney_specular_sample(sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
+				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
+			break;*/
+		case CLOSURE_BSDF_DISNEY_CLEARCOAT_ID:
+			label = bsdf_disney_clearcoat_sample(sc, ccl_fetch(sd, Ng), ccl_fetch(sd, I), ccl_fetch(sd, dI).dx, ccl_fetch(sd, dI).dy, randu, randv,
 				eval, omega_in, &domega_in->dx, &domega_in->dy, pdf);
 			break;
 #endif
@@ -222,6 +244,19 @@ float3 bsdf_eval(KernelGlobals *kg,
 			case CLOSURE_BSDF_HAIR_TRANSMISSION_ID:
 				eval = bsdf_hair_transmission_eval_reflect(sc, ccl_fetch(sd, I), omega_in, pdf);
 				break;
+			case CLOSURE_BSDF_DISNEY_DIFFUSE_ID:
+			case CLOSURE_BSDF_BSSRDF_DISNEY_ID:
+				eval = bsdf_disney_diffuse_eval_reflect(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
+			case CLOSURE_BSDF_DISNEY_SHEEN_ID:
+				eval = bsdf_disney_sheen_eval_reflect(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
+			/*case CLOSURE_BSDF_DISNEY_SPECULAR_ID:
+				eval = bsdf_disney_specular_eval_reflect(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;*/
+			case CLOSURE_BSDF_DISNEY_CLEARCOAT_ID:
+				eval = bsdf_disney_clearcoat_eval_reflect(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
 #endif
 #ifdef __VOLUME__
 			case CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID:
@@ -261,6 +296,7 @@ float3 bsdf_eval(KernelGlobals *kg,
 				eval = bsdf_microfacet_ggx_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
 				break;
 			case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
+			case CLOSURE_BSDF_MICROFACET_MULTI_GGX_REFRACTION_ID:
 				eval = bsdf_microfacet_multi_ggx_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf, &ccl_fetch(sd, lcg_state));
 				break;
 			case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
@@ -289,6 +325,19 @@ float3 bsdf_eval(KernelGlobals *kg,
 				break;
 			case CLOSURE_BSDF_HAIR_TRANSMISSION_ID:
 				eval = bsdf_hair_transmission_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
+			case CLOSURE_BSDF_DISNEY_DIFFUSE_ID:
+			case CLOSURE_BSDF_BSSRDF_DISNEY_ID:
+				eval = bsdf_disney_diffuse_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
+			case CLOSURE_BSDF_DISNEY_SHEEN_ID:
+				eval = bsdf_disney_sheen_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;
+			/*case CLOSURE_BSDF_DISNEY_SPECULAR_ID:
+				eval = bsdf_disney_specular_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
+				break;*/
+			case CLOSURE_BSDF_DISNEY_CLEARCOAT_ID:
+				eval = bsdf_disney_clearcoat_eval_transmit(sc, ccl_fetch(sd, I), omega_in, pdf);
 				break;
 #endif
 #ifdef __VOLUME__

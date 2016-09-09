@@ -572,7 +572,7 @@ ccl_device_noinline VolumeIntegrateResult kernel_volume_integrate(KernelGlobals 
 	/* workaround to fix correlation bug in T38710, can find better solution
 	 * in random number generator later, for now this is done here to not impact
 	 * performance of rendering without volumes */
-	RNG tmp_rng = cmj_hash(*rng, state->rng_offset);
+	RNG tmp_rng = path_rng_hash(*rng, state->rng_offset);
 
 	shader_setup_from_volume(kg, sd, ray);
 

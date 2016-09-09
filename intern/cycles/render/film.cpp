@@ -284,6 +284,9 @@ NODE_DEFINE(Film)
 
 	SOCKET_BOOLEAN(use_sample_clamp, "Use Sample Clamp", false);
 
+	SOCKET_BOOLEAN(denoising_passes, "Generate Denoising Passes", false);
+	SOCKET_BOOLEAN(selective_denoising, "Use Selective Denoising Pass", false);
+
 	return type;
 }
 
@@ -438,6 +441,19 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 
 		kfilm->pass_stride += pass.components;
 	}
+
+	if(denoising_passes) {
+		kfilm->pass_denoising = kfilm->pass_stride;
+		kfilm->pass_stride += 26;
+		kfilm->denoise_flag = denoise_flags;
+		if(selective_denoising) {
+			kfilm->pass_no_denoising = kfilm->pass_stride;
+			kfilm->pass_stride += 3;
+			kfilm->use_light_pass = 1;
+		}
+	}
+	kfilm->num_frames = 1;
+	kfilm->prev_frames = 0;
 
 	kfilm->pass_stride = align_up(kfilm->pass_stride, 4);
 	kfilm->pass_alpha_threshold = pass_alpha_threshold;

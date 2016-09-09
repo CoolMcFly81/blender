@@ -55,6 +55,9 @@ set(SRC_HEADERS
 	kernel_differential.h
 	kernel_emission.h
 	kernel_film.h
+	kernel_filter.h
+	kernel_filter_pre.h
+	kernel_filter_util.h
 	kernel_globals.h
 	kernel_jitter.h
 	kernel_light.h
@@ -107,6 +110,10 @@ set(SRC_CLOSURE_HEADERS
 	closure/bssrdf.h
 	closure/emissive.h
 	closure/volume.h
+    closure/bsdf_disney_diffuse.h
+    closure/bsdf_disney_sheen.h
+    closure/bsdf_disney_specular.h
+    closure/bsdf_disney_clearcoat.h
 )
 
 set(SRC_SVM_HEADERS
@@ -129,6 +136,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_geometry.h
 	svm/svm_gradient.h
 	svm/svm_hsv.h
+	svm/svm_ies.h
 	svm/svm_image.h
 	svm/svm_invert.h
 	svm/svm_light_path.h
@@ -177,6 +185,7 @@ set(SRC_UTIL_HEADERS
 	../util/util_half.h
 	../util/util_math.h
 	../util/util_math_fast.h
+	../util/util_math_matrix.h
 	../util/util_static_assert.h
 	../util/util_transform.h
 	../util/util_texture.h
@@ -247,6 +256,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
 			set(cuda_debug_flags "")
 		endif()
 
+		if(WITH_CYCLES_DEBUG_FILTER)
+			set(cuda_filter_debug_flags "-DWITH_CYCLES_DEBUG_FILTER")
+		else()
+			set(cuda_filter_debug_flags "")
+		endif()
+
 		set(cuda_nvcc_command ${CUDA_NVCC_EXECUTABLE})
 		set(cuda_nvcc_version ${CUDA_VERSION})
 
@@ -272,6 +287,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 					${cuda_math_flags}
 					${cuda_extra_flags}
 					${cuda_debug_flags}
+					${cuda_filter_debug_flags}
 					-I${CMAKE_CURRENT_SOURCE_DIR}/../util
 					-I${CMAKE_CURRENT_SOURCE_DIR}/svm
 					-DCCL_NAMESPACE_BEGIN=
