@@ -77,6 +77,8 @@
 #include "BLI_threads.h"
 #include "BLT_translation.h"
 
+#include "RNA_access.h"
+
 #include "BKE_action.h"
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
@@ -121,8 +123,6 @@
 
 #include "DEG_depsgraph.h"
 
-#include "RNA_access.h"
-
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
@@ -139,6 +139,10 @@
  * also note that the id _must_ have a library - campbell */
 void BKE_id_lib_local_paths(Main *bmain, Library *lib, ID *id)
 {
+	if (lib->flag & LIBRARY_FLAG_VIRTUAL) {
+		return;
+	}
+
 	const char *bpath_user_data[2] = {bmain->name, lib->filepath};
 
 	BKE_bpath_traverse_id(bmain, id,
@@ -149,7 +153,7 @@ void BKE_id_lib_local_paths(Main *bmain, Library *lib, ID *id)
 
 void id_lib_extern(ID *id)
 {
-	if (id && ID_IS_LINKED_DATABLOCK(id)) {
+	if (id && ID_IS_LINKED(id)) {
 		BLI_assert(BKE_idcode_is_linkable(GS(id->name)));
 		if (id->tag & LIB_TAG_INDIRECT) {
 			id->tag -= LIB_TAG_INDIRECT;
@@ -281,7 +285,7 @@ void BKE_id_expand_local(ID *id)
  */
 void BKE_id_copy_ensure_local(Main *bmain, ID *old_id, ID *new_id)
 {
-	if (ID_IS_LINKED_DATABLOCK(old_id)) {
+	if (ID_IS_LINKED(old_id)) {
 		BKE_id_expand_local(new_id);
 		BKE_id_lib_local_paths(bmain, old_id->lib, new_id);
 	}
@@ -300,7 +304,7 @@ void BKE_id_make_local_generic(Main *bmain, ID *id, const bool id_in_mainlist, c
 	 * In case we make a whole lib's content local, we always want to localize, and we skip remapping (done later).
 	 */
 
-	if (!ID_IS_LINKED_DATABLOCK(id)) {
+	if (!ID_IS_LINKED(id)) {
 		return;
 	}
 
@@ -736,7 +740,7 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
 
 	/* flag for full recalc */
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
-		if (ID_IS_LINKED_DATABLOCK(ob)) {
+		if (ID_IS_LINKED(ob)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 		}
 	}
@@ -1167,7 +1171,7 @@ static int id_relink_looper(void *UNUSED(user_data), ID *UNUSED(self_id), ID **i
 
 void BKE_libblock_relink(ID *id)
 {
-	if (ID_IS_LINKED_DATABLOCK(id))
+	if (ID_IS_LINKED(id))
 		return;
 
 	BKE_library_foreach_ID_link(id, id_relink_looper, NULL, 0);
@@ -1177,6 +1181,8 @@ void BKE_library_free(Library *lib)
 {
 	if (lib->packedfile)
 		freePackedFile(lib->packedfile);
+
+	BKE_library_asset_repository_free(lib);
 }
 
 Main *BKE_main_new(void)
@@ -1382,7 +1388,7 @@ static ID *is_dupid(ListBase *lb, ID *id, const char *name)
 	
 	for (idtest = lb->first; idtest; idtest = idtest->next) {
 		/* if idtest is not a lib */ 
-		if (id != idtest && !ID_IS_LINKED_DATABLOCK(idtest)) {
+		if (id != idtest && !ID_IS_LINKED_DATABLOCK(idtest)) {  /* Virtual lib IDs are considered as local ones here. */
 			/* do not test alphabetic! */
 			/* optimized */
 			if (idtest->name[2] == name[0]) {
@@ -1523,7 +1529,7 @@ bool new_id(ListBase *lb, ID *id, const char *tname)
 	bool result;
 	char name[MAX_ID_NAME - 2];
 
-	/* if library, don't rename */
+	/* if real library, don't rename */
 	if (ID_IS_LINKED_DATABLOCK(id))
 		return false;
 
@@ -1725,6 +1731,7 @@ void BKE_library_make_local(Main *bmain, const Library *lib, const bool untagged
 	}
 }
 
+
 /**
  * Use after setting the ID's name
  * When name exists: call 'new_id'
@@ -1770,6 +1777,11 @@ void BKE_id_ui_prefix(char name[MAX_ID_NAME + 1], const ID *id)
 
 void BKE_library_filepath_set(Library *lib, const char *filepath)
 {
+	if (lib->flag & LIBRARY_FLAG_VIRTUAL) {
+		/* Setting path for virtual libraries makes no sense. */
+		return;
+	}
+
 	/* in some cases this is used to update the absolute path from the
 	 * relative */
 	if (lib->name != filepath) {

@@ -50,6 +50,9 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
+#include "RNA_access.h"
+
+#include "BKE_asset_engine.h"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
 #include "BKE_global.h"
@@ -65,8 +68,6 @@
 #include "ED_screen.h"
 #include "ED_view3d.h"
 #include "ED_util.h"
-
-#include "RNA_access.h"
 
 #include "GPU_debug.h"
 

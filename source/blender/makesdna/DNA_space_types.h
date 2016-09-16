@@ -629,6 +629,8 @@ typedef struct SpaceFile {
 	
 	int scroll_offset;
 
+	char asset_engine[64];  /* BKE_ST_MAXNAME */
+
 	struct FileSelectParams *params; /* config and input for file select */
 	
 	struct FileList *files; /* holds the list of files to show */
@@ -756,26 +758,6 @@ typedef enum eDirEntry_SelectFlag {
 
 /* ***** Related to file browser, but never saved in DNA, only here to help with RNA. ***** */
 
-/* About Unique identifier.
- * Stored in a CustomProps once imported.
- * Each engine is free to use it as it likes - it will be the only thing passed to it by blender to identify
- * asset/variant/version (concatenating the three into a single 48 bytes one).
- * Assumed to be 128bits, handled as four integers due to lack of real bytes proptype in RNA :|.
- */
-#define ASSET_UUID_LENGTH     16
-
-/* Used to communicate with asset engines outside of 'import' context. */
-typedef struct AssetUUID {
-	int uuid_asset[4];
-	int uuid_variant[4];
-	int uuid_revision[4];
-} AssetUUID;
-
-typedef struct AssetUUIDList {
-	AssetUUID *uuids;
-	int nbr_uuids, pad;
-} AssetUUIDList;
-
 /* Container for a revision, only relevant in asset context. */
 typedef struct FileDirEntryRevision {
 	struct FileDirEntryRevision *next, *prev;
@@ -811,6 +793,8 @@ typedef struct FileDirEntryVariant {
 typedef struct FileDirEntry {
 	struct FileDirEntry *next, *prev;
 
+	/* XXX This only copes for asset uuid itself,
+	 *     we'll likely want to extend that to variants/revisions too at some point? */
 	int uuid[4];
 	char *name;
 	char *description;
@@ -849,7 +833,6 @@ typedef struct FileDirEntryArr {
 	ListBase entries;
 	int nbr_entries;
 	int nbr_entries_filtered;
-	int entry_idx_start, entry_idx_end;
 
 	char root[1024];	 /* FILE_MAX */
 } FileDirEntryArr;

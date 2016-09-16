@@ -1573,7 +1573,7 @@ static void outliner_draw_tree_element(
 		else
 			offsx += 2 * ufac;
 		
-		if (tselem->type == 0 && ID_IS_LINKED_DATABLOCK(tselem->id)) {
+		if (tselem->type == 0 && ID_IS_LINKED(tselem->id)) {
 			glPixelTransferf(GL_ALPHA_SCALE, 0.5f);
 			if (tselem->id->tag & LIB_TAG_MISSING) {
 				UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_LIBRARY_DATA_BROKEN);
@@ -1583,6 +1583,22 @@ static void outliner_draw_tree_element(
 			}
 			else {
 				UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_LIBRARY_DATA_DIRECT);
+			}
+			if (tselem->id->uuid) {
+				offsx += UI_UNIT_X;
+				UI_icon_draw((float)startx + offsx - 0.5f * ufac, (float)*starty + 1.5f * ufac, ICON_SOLO_ON);
+				if (tselem->id->uuid->tag & UUID_TAG_ENGINE_MISSING) {
+					UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_GHOST_ENABLED);
+				}
+				else if (tselem->id->uuid->tag & UUID_TAG_ASSET_MISSING) {
+					/* Nothing special (underlying icon is already 'broken' one)... */
+				}
+				else if (tselem->id->uuid->tag & UUID_TAG_ASSET_RELOAD) {
+					UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_FILE_REFRESH);
+				}
+				else {
+					/* Nothing special (underlying icon is already 'OK' one)... */
+				}
 			}
 			glPixelTransferf(GL_ALPHA_SCALE, 1.0f);
 			offsx += UI_UNIT_X;
