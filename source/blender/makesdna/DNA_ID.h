@@ -106,52 +106,6 @@ enum {
 
 /* add any future new id property types here.*/
 
-/* About Unique identifier.
- * Each engine is free to use it as it likes - it will be the only thing passed to it by blender to identify
- * asset/variant/version (concatenating the three into a single 48 bytes one).
- * Assumed to be 128bits, handled as four integers due to lack of real bytes proptype in RNA :|.
- */
-#define ASSET_UUID_LENGTH     16
-
-/* Used to communicate with asset engines outside of 'import' context. */
-typedef struct AssetUUID {
-	int uuid_asset[4];
-	int uuid_variant[4];
-	int uuid_revision[4];
-	short flag;  /* Saved. */
-	short tag;   /* Runtime. */
-
-	/* Preview. */
-	short width;
-	short height;
-	char *ibuff;  /* RGBA 8bits. */
-} AssetUUID;
-
-/**
- * uuid->flag (persitent, saved in .blend files).
- */
-enum {
-	UUID_FLAG_LAST_REVISION  = 1 << 0,  /* This asset should always use latest available revision. */
-};
-
-/**
- * uuid->tag (runtime only).
- */
-enum {
-	UUID_TAG_ENGINE_MISSING  = 1 << 0,  /* The asset engine used for this asset is not known by Blender. */
-	UUID_TAG_ASSET_MISSING   = 1 << 1,  /* The asset engine was found but does not know about this asset (anymore). */
-
-	UUID_TAG_ASSET_RELOAD    = 1 << 8,  /* Set by the asset engine to indicates that that asset has to be reloaded. */
-	UUID_TAG_ASSET_NOPREVIEW = 1 << 9,  /* Set by the asset engine to indicates that that asset has no preview. */
-};
-
-/* Not stored in files, but defined here to ease RNA code... */
-typedef struct AssetUUIDList {
-	AssetUUID *uuids;
-	int nbr_uuids;
-	int asset_engine_version;
-} AssetUUIDList;
-
 /* watch it: Sequence has identical beginning. */
 /**
  * ID is the first thing included in all serializable types. It
@@ -180,41 +134,7 @@ typedef struct ID {
 	int us;
 	int icon_id;
 	IDProperty *properties;
-
-	AssetUUID *uuid;
 } ID;
-
-/* Note: Those two structs are for now being runtime-stored in Library datablocks.
- *       Later it may be interesting to also cache those globally in some ghash...
- */
-/**
- * An asset reference, storing the uuid and a list of pointers to all used IDs.
- * Runtime only currently.
- */
-#
-#
-typedef struct AssetRef {
-	struct AssetRef *next, *prev;
-	AssetUUID uuid;
-
-	/* Runtime */
-	ListBase id_list;  /* List of pointers to all IDs used by this asset (first one being 'root' one). */
-} AssetRef;
-
-/**
- * An asset repository reference, storing all that's needed to find the repo, and a list of loaded assets.
- * WARNING: this is per library, **not** per asset repo.
- */
-typedef struct AssetRepositoryRef {
-	char asset_engine[64];  /* MAX_ST_NAME */
-	int asset_engine_version;
-	int pad_i1;
-	/* 'Path' to asset engine's root of the reprository, can be an url, whatever... */
-	char root[768];  /* FILE_MAXDIR */
-
-	/* Runtime */
-	ListBase assets;  /* A list of AssetRef assets from this lib. */
-} AssetRepositoryRef;
 
 /**
  * For each library file used, a Library struct is added to Main
@@ -223,8 +143,7 @@ typedef struct AssetRepositoryRef {
 typedef struct Library {
 	ID id;
 	struct FileData *filedata;
-	/* path name used for reading, can be relative and edited in the outliner. */
-	char name[1024];
+	char name[1024];  /* path name used for reading, can be relative and edited in the outliner */
 
 	/* absolute filepath, this is only for convenience, 'name' is the real path used on file read but in
 	 * some cases its useful to access the absolute one.
@@ -236,19 +155,9 @@ typedef struct Library {
 	
 	struct PackedFile *packedfile;
 
-	AssetRepositoryRef *asset_repository;
-
 	int temp_index;
-
-	short flag;
-	short pad_s1;
+	int _pad;
 } Library;
-
-/* Library.flag */
-enum {
-	/* The library does not actually exist, used to allow handling of files from asset engines. */
-	LIBRARY_FLAG_VIRTUAL = 1 << 0,
-};
 
 enum eIconSizes {
 	ICON_SIZE_ICON = 0,
@@ -367,10 +276,7 @@ typedef enum ID_Type {
 
 #define ID_MISSING(_id) (((_id)->tag & LIB_TAG_MISSING) != 0)
 
-#define ID_IS_LINKED(_id) (((ID *)(_id))->lib != NULL)
-#define LIB_IS_VIRTUAL(_lib) (((_lib)->flag & LIBRARY_FLAG_VIRTUAL) != 0)
-#define ID_IS_LINKED_DATABLOCK(_id) (ID_IS_LINKED(_id) && !LIB_IS_VIRTUAL(((ID *)(_id))->lib))
-#define ID_IS_LINKED_DATAPATH(_id) (ID_IS_LINKED(_id) && LIB_IS_VIRTUAL(((ID *)(_id))->lib))
+#define ID_IS_LINKED_DATABLOCK(_id) (((ID *)(_id))->lib != NULL)
 
 #ifdef GS
 #  undef GS
@@ -381,12 +287,8 @@ typedef enum ID_Type {
 #define ID_NEW_US(a)	if (      (a)->id.newid)       { (a) = (void *)(a)->id.newid;       (a)->id.us++; }
 #define ID_NEW_US2(a)	if (((ID *)a)->newid)          { (a) = ((ID  *)a)->newid;     ((ID *)a)->us++;    }
 
-#define ID_VIRTUAL_LIBRARY_VALID(_id) (ELEM(GS((_id)->name), ID_IM, ID_VF, ID_TXT, ID_SO))
-
 /* id->flag (persitent). */
 enum {
-	/* Flag asset IDs (the ones who should have a valid uuid). */
-	LIB_ASSET           = 1 << 0,
 	LIB_FAKEUSER        = 1 << 9,
 };
 
@@ -409,8 +311,6 @@ enum {
 	LIB_TAG_EXTERN          = 1 << 0,
 	/* RESET_NEVER Datablock is from a library, and is only used (linked) inderectly through other libraries. */
 	LIB_TAG_INDIRECT        = 1 << 1,
-	/* RESET_NEVER Datablock is (or is used by) an asset. */
-	LIB_TAG_ASSET           = 1 << 9,
 
 	/* RESET_AFTER_USE Three flags used internally in readfile.c, to mark IDs needing to be read (only done once). */
 	LIB_TAG_NEED_EXPAND     = 1 << 3,

@@ -33,14 +33,9 @@
 #include "BLI_fileops_types.h"
 #include "BLI_linklist.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_types.h"
-
 #include "BLO_readfile.h"
 
 #include "BKE_appdir.h"
-#include "BKE_asset_engine.h"
 #include "BKE_context.h"
 #include "BKE_screen.h"
 #include "BKE_global.h"
@@ -57,6 +52,9 @@
 #include "UI_interface.h"
 
 #include "MEM_guardedalloc.h"
+
+#include "RNA_access.h"
+#include "RNA_define.h"
 
 #include "UI_view2d.h"
 
@@ -102,7 +100,7 @@ static void file_deselect_all(SpaceFile *sfile, unsigned int flag)
 {
 	FileSelection sel;
 	sel.first = 0;
-	sel.last = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile)) - 1;
+	sel.last = filelist_files_ensure(sfile->files) - 1;
 	
 	filelist_entries_select_index_range_set(sfile->files, &sel, FILE_SEL_REMOVE, flag, CHECK_ALL);
 }
@@ -142,7 +140,7 @@ static FileSelection file_selection_get(bContext *C, const rcti *rect, bool fill
 {
 	ARegion *ar = CTX_wm_region(C);
 	SpaceFile *sfile = CTX_wm_space_file(C);
-	int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+	int numfiles = filelist_files_ensure(sfile->files);
 	FileSelection sel;
 
 	sel = find_file_mouse_rect(sfile, ar, rect);
@@ -171,7 +169,7 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 	FileSelect retval = FILE_SELECT_NOTHING;
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	FileSelectParams *params = ED_fileselect_get_params(sfile);
-	int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+	int numfiles = filelist_files_ensure(sfile->files);
 	const FileDirEntry *file;
 
 	/* make the selected file active */
@@ -225,8 +223,9 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 /**
  * \warning: loops over all files so better use cautiously
  */
-static bool file_is_any_selected(struct FileList *files, const int numfiles)
+static bool file_is_any_selected(struct FileList *files)
 {
+	const int numfiles = filelist_files_ensure(files);
 	int i;
 
 	/* Is any file selected ? */
@@ -289,8 +288,7 @@ static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select,
 	FileSelect retval = FILE_SELECT_NOTHING;
 	FileSelection sel = file_selection_get(C, rect, fill); /* get the selection */
 	const FileCheckType check_type = (sfile->params->flag & FILE_DIRSEL_ONLY) ? CHECK_DIRS : CHECK_ALL;
-	const int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
-
+	
 	/* flag the files as selected in the filelist */
 	filelist_entries_select_index_range_set(sfile->files, &sel, select, FILE_SEL_SELECTED, check_type);
 	
@@ -305,7 +303,7 @@ static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select,
 		}
 	}
 
-	if (select != FILE_SEL_ADD && !file_is_any_selected(sfile->files, numfiles)) {
+	if (select != FILE_SEL_ADD && !file_is_any_selected(sfile->files)) {
 		sfile->params->active_file = -1;
 	}
 	else {
@@ -485,7 +483,7 @@ static int file_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	if (sfile && sfile->params) {
 		int idx = sfile->params->highlight_file;
-		int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+		int numfiles = filelist_files_ensure(sfile->files);
 
 		if ((idx >= 0) && (idx < numfiles)) {
 			/* single select, deselect all selected first */
@@ -650,8 +648,8 @@ static bool file_walk_select_do(
         const bool extend, const bool fill)
 {
 	struct FileList *files = sfile->files;
-	const int numfiles = filelist_files_ensure(files, ED_fileselect_get_params(sfile));
-	const bool has_selection = file_is_any_selected(files, numfiles);
+	const int numfiles = filelist_files_ensure(files);
+	const bool has_selection = file_is_any_selected(files);
 	const int active_old = params->active_file;
 	int active_new = -1;
 	int other_site = -1; /* file on the other site of active_old */
@@ -766,8 +764,8 @@ static int file_select_all_exec(bContext *C, wmOperator *UNUSED(op))
 	ScrArea *sa = CTX_wm_area(C);
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	FileSelection sel;
-	const int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
-	const bool has_selection = file_is_any_selected(sfile->files, numfiles);
+	const int numfiles = filelist_files_ensure(sfile->files);
+	const bool has_selection = file_is_any_selected(sfile->files);
 
 	sel.first = 0; 
 	sel.last = numfiles - 1;
@@ -1103,8 +1101,8 @@ int file_highlight_set(SpaceFile *sfile, ARegion *ar, int mx, int my)
 
 	if (sfile == NULL || sfile->files == NULL) return 0;
 
+	numfiles = filelist_files_ensure(sfile->files);
 	params = ED_fileselect_get_params(sfile);
-	numfiles = filelist_files_ensure(sfile->files, params);
 
 	origfile = params->highlight_file;
 
@@ -1191,146 +1189,81 @@ void FILE_OT_cancel(struct wmOperatorType *ot)
 }
 
 
-void file_sfile_to_operator_ex(
-        wmOperator *op, SpaceFile *sfile, char filepath[FILE_MAX_LIBEXTRA], const bool is_fake)
+void file_sfile_to_operator_ex(wmOperator *op, SpaceFile *sfile, char *filepath)
 {
-	PropertyRNA *prop, *prop_files, *prop_dirs;
-	/* Note filebrowser does not create ae for default NONE 'engine', we'll get NULL in this case here. */
-	AssetEngine *ae = filelist_assetengine_get(sfile->files);
-	AssetUUIDList *uuids;
-	FileDirEntryArr *selection;
-	FileCheckType check = CHECK_NONE;
+	PropertyRNA *prop;
 
-	if ((prop_files = RNA_struct_find_property(op->ptr, "files"))) {
-	    check |= CHECK_FILES;
-	}
-	if ((prop_dirs = RNA_struct_find_property(op->ptr, "dirs"))) {
-		check |= CHECK_DIRS;
+	BLI_join_dirfile(filepath, FILE_MAX, sfile->params->dir, sfile->params->file); /* XXX, not real length */
+
+	if ((prop = RNA_struct_find_property(op->ptr, "relative_path"))) {
+		if (RNA_property_boolean_get(op->ptr, prop)) {
+			BLI_path_rel(filepath, G.main->name);
+		}
 	}
 
-	BLI_assert(STREQ(sfile->params->dir, filelist_dir(sfile->files)));
-
-	selection = filelist_selection_get(sfile->files, check, sfile->params->file, &uuids, !is_fake);
-
-	if (ae && selection->nbr_entries && !is_fake) {  /* We only expect uuids when not is_fake... */
-		BLI_assert(uuids);
+	if ((prop = RNA_struct_find_property(op->ptr, "filename"))) {
+		RNA_property_string_set(op->ptr, prop, sfile->params->file);
 	}
-
 	if ((prop = RNA_struct_find_property(op->ptr, "directory"))) {
-		RNA_property_string_set(op->ptr, prop, selection->root);
+		RNA_property_string_set(op->ptr, prop, sfile->params->dir);
 	}
+	if ((prop = RNA_struct_find_property(op->ptr, "filepath"))) {
+		RNA_property_string_set(op->ptr, prop, filepath);
+	}
+	
+	/* some ops have multiple files to select */
+	/* this is called on operators check() so clear collections first since
+	 * they may be already set. */
+	{
+		int i, numfiles = filelist_files_ensure(sfile->files);
 
-	if (selection->nbr_entries != 0) {
-		const char *filename;
-
-		filename = ((FileDirEntry *)selection->entries.first)->relpath;
-		BLI_join_dirfile(filepath, FILE_MAX_LIBEXTRA /* XXX sizeof(filepath) */, selection->root, filename);
-
-		if ((prop = RNA_struct_find_property(op->ptr, "relative_path"))) {
-			if (RNA_property_boolean_get(op->ptr, prop)) {
-				BLI_path_rel(filepath, G.main->name);
-			}
-		}
-
-		if ((prop = RNA_struct_find_property(op->ptr, "filename"))) {
-			RNA_property_string_set(op->ptr, prop, filename);
-		}
-		if ((prop = RNA_struct_find_property(op->ptr, "filepath"))) {
-			RNA_property_string_set(op->ptr, prop, filepath);
-		}
-		if (ae && uuids) {
-			if ((prop = RNA_struct_find_property(op->ptr, "asset_uuid"))) {
-				RNA_property_int_set_array(op->ptr, prop, uuids->uuids[0].uuid_asset);
-			}
-			if ((prop = RNA_struct_find_property(op->ptr, "variant_uuid"))) {
-				RNA_property_int_set_array(op->ptr, prop, uuids->uuids[0].uuid_variant);
-			}
-			if ((prop = RNA_struct_find_property(op->ptr, "revision_uuid"))) {
-				RNA_property_int_set_array(op->ptr, prop, uuids->uuids[0].uuid_revision);
-			}
-		}
-
-		/* some ops have multiple files to select */
-		/* this is called on operators check() so clear collections first since
-		 * they may be already set. */
-		{
-			if (prop_files) {
-				FileDirEntry *entry;
-				PointerRNA itemptr;
-				int i;
-
-				RNA_property_collection_clear(op->ptr, prop_files);
-				for (i = 0, entry = selection->entries.first; entry; entry = entry->next, i++) {
-					if (!(entry->typeflag & FILE_TYPE_DIR)) {
-						RNA_property_collection_add(op->ptr, prop_files, &itemptr);
-						RNA_string_set(&itemptr, "name", entry->relpath);
-						if (ae) {
-							BLI_assert(i < uuids->nbr_uuids);
-							RNA_int_set_array(&itemptr, "asset_uuid", uuids->uuids[i].uuid_asset);
-							RNA_int_set_array(&itemptr, "variant_uuid", uuids->uuids[i].uuid_variant);
-							RNA_int_set_array(&itemptr, "revision_uuid", uuids->uuids[i].uuid_revision);
-						}
-					}
+		if ((prop = RNA_struct_find_property(op->ptr, "files"))) {
+			PointerRNA itemptr;
+			int num_files = 0;
+			RNA_property_collection_clear(op->ptr, prop);
+			for (i = 0; i < numfiles; i++) {
+				if (filelist_entry_select_index_get(sfile->files, i, CHECK_FILES)) {
+					FileDirEntry *file = filelist_file(sfile->files, i);
+					RNA_property_collection_add(op->ptr, prop, &itemptr);
+					RNA_string_set(&itemptr, "name", file->relpath);
+					num_files++;
 				}
 			}
-
-			if (prop_dirs) {
-				FileDirEntry *entry;
-				PointerRNA itemptr;
-				int num_dirs = 0;
-
-				RNA_property_collection_clear(op->ptr, prop);
-				for (entry = selection->entries.first; entry; entry = entry->next) {
-					if (entry->typeflag & FILE_TYPE_DIR) {
-						RNA_property_collection_add(op->ptr, prop_dirs, &itemptr);
-						RNA_string_set(&itemptr, "name", entry->relpath);
-						num_dirs++;
-					}
-				}
-
-				/* make sure the directory specified in the button is added even if no directory selected */
-				if (!num_dirs) {
-					RNA_property_collection_add(op->ptr, prop_dirs, &itemptr);
-					RNA_string_set(&itemptr, "name", sfile->params->dir);
-				}
+			/* make sure the file specified in the filename button is added even if no files selected */
+			if (0 == num_files) {
+				RNA_property_collection_add(op->ptr, prop, &itemptr);
+				RNA_string_set(&itemptr, "name", sfile->params->file);
 			}
 		}
-	}
-	else {
-		/* We have to ensure those are properly reset!!! */
-		if ((prop = RNA_struct_find_property(op->ptr, "filename"))) {
-			RNA_property_string_set(op->ptr, prop, sfile->params->file);
-		}
-		if ((prop = RNA_struct_find_property(op->ptr, "filepath"))) {
-			BLI_join_dirfile(filepath, FILE_MAX_LIBEXTRA, sfile->params->dir, sfile->params->file);
-			RNA_property_string_set(op->ptr, prop, filepath);
-		}
-		if (prop_files) {
-			RNA_property_reset(op->ptr, prop, 0);
-		}
-		if (prop_dirs) {
-			RNA_property_reset(op->ptr, prop, 0);
-		}
-	}
 
-	if (!is_fake && ae && (prop = RNA_struct_find_property(op->ptr, "asset_engine"))) {
-		RNA_property_string_set(op->ptr, prop, ae->type->idname);
-	}
+		if ((prop = RNA_struct_find_property(op->ptr, "dirs"))) {
+			PointerRNA itemptr;
+			int num_dirs = 0;
+			RNA_property_collection_clear(op->ptr, prop);
+			for (i = 0; i < numfiles; i++) {
+				if (filelist_entry_select_index_get(sfile->files, i, CHECK_DIRS)) {
+					FileDirEntry *file = filelist_file(sfile->files, i);
+					RNA_property_collection_add(op->ptr, prop, &itemptr);
+					RNA_string_set(&itemptr, "name", file->relpath);
+					num_dirs++;
+				}
+			}
+			
+			/* make sure the directory specified in the button is added even if no directory selected */
+			if (0 == num_dirs) {
+				RNA_property_collection_add(op->ptr, prop, &itemptr);
+				RNA_string_set(&itemptr, "name", sfile->params->dir);
+			}
+		}
 
-	if (uuids) {
-		MEM_freeN(uuids->uuids);
-		MEM_freeN(uuids);
-	}
 
-	BKE_filedir_entryarr_clear(selection);
-	MEM_freeN(selection);
+	}
 }
-
 void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile)
 {
 	char filepath[FILE_MAX];
 
-	file_sfile_to_operator_ex(op, sfile, filepath, false);
+	file_sfile_to_operator_ex(op, sfile, filepath);
 }
 
 void file_operator_to_sfile(SpaceFile *sfile, wmOperator *op)
@@ -1387,8 +1320,7 @@ void file_draw_check(bContext *C)
 	wmOperator *op = sfile->op;
 	if (op) { /* fail on reload */
 		if (op->type->check) {
-			char filepath[FILE_MAX_LIBEXTRA];
-			file_sfile_to_operator_ex(op, sfile, filepath, true);
+			file_sfile_to_operator(op, sfile);
 			
 			/* redraw */
 			if (op->type->check(C, op)) {
@@ -1430,8 +1362,8 @@ int file_exec(bContext *C, wmOperator *exec_op)
 	wmWindowManager *wm = CTX_wm_manager(C);
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	const struct FileDirEntry *file = filelist_file(sfile->files, sfile->params->active_file);
-	char filepath[FILE_MAX_LIBEXTRA];
-	
+	char filepath[FILE_MAX];
+
 	/* directory change */
 	if (file && (file->typeflag & FILE_TYPE_DIR)) {
 		if (!file->relpath) {
@@ -1456,7 +1388,7 @@ int file_exec(bContext *C, wmOperator *exec_op)
 		/* when used as a macro, for doubleclick, 
 		 * to prevent closing when doubleclicking on .. item */
 		if (RNA_boolean_get(exec_op->ptr, "need_active")) {
-			const int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+			const int numfiles = filelist_files_ensure(sfile->files);
 			int i, active = 0;
 			
 			for (i = 0; i < numfiles; i++) {
@@ -1471,7 +1403,7 @@ int file_exec(bContext *C, wmOperator *exec_op)
 		
 		sfile->op = NULL;
 
-		file_sfile_to_operator_ex(op, sfile, filepath, false);
+		file_sfile_to_operator_ex(op, sfile, filepath);
 
 		if (BLI_exists(sfile->params->dir)) {
 			fsmenu_insert_entry(ED_fsmenu_get(), FS_CATEGORY_RECENT, sfile->params->dir, NULL,
@@ -1640,7 +1572,7 @@ static int file_smoothscroll_invoke(bContext *C, wmOperator *UNUSED(op), const w
 	if (sfile->smoothscroll_timer == NULL || sfile->smoothscroll_timer != event->customdata)
 		return OPERATOR_PASS_THROUGH;
 	
-	numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+	numfiles = filelist_files_ensure(sfile->files);
 
 	/* check if we are editing a name */
 	for (i = 0; i < numfiles; ++i) {
@@ -2237,7 +2169,7 @@ static int file_rename_exec(bContext *C, wmOperator *UNUSED(op))
 	
 	if (sfile->params) {
 		int idx = sfile->params->highlight_file;
-		int numfiles = filelist_files_ensure(sfile->files, sfile->params);
+		int numfiles = filelist_files_ensure(sfile->files);
 		if ((0 <= idx) && (idx < numfiles)) {
 			FileDirEntry *file = filelist_file(sfile->files, idx);
 			filelist_entry_select_index_set(sfile->files, idx, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
@@ -2258,7 +2190,7 @@ static int file_rename_poll(bContext *C)
 
 	if (sfile && sfile->params) {
 		int idx = sfile->params->highlight_file;
-		int numfiles = filelist_files_ensure(sfile->files, sfile->params);
+		int numfiles = filelist_files_ensure(sfile->files);
 
 		if ((0 <= idx) && (idx < numfiles)) {
 			FileDirEntry *file = filelist_file(sfile->files, idx);
@@ -2304,7 +2236,7 @@ static int file_delete_poll(bContext *C)
 
 	if (sfile && sfile->params) {
 		char dir[FILE_MAX];
-		int numfiles = filelist_files_ensure(sfile->files, sfile->params);
+		int numfiles = filelist_files_ensure(sfile->files);
 		int i;
 		int num_selected = 0;
 
@@ -2331,7 +2263,7 @@ int file_delete_exec(bContext *C, wmOperator *op)
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	ScrArea *sa = CTX_wm_area(C);
 	FileDirEntry *file;
-	int numfiles = filelist_files_ensure(sfile->files, ED_fileselect_get_params(sfile));
+	int numfiles = filelist_files_ensure(sfile->files);
 	int i;
 
 	bool report_error = false;

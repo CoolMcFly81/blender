@@ -50,11 +50,8 @@
 #include "BLI_callbacks.h"
 #include "BLI_string.h"
 
-#include "RNA_define.h"
-
 /* mostly init functions */
 #include "BKE_appdir.h"
-#include "BKE_asset_engine.h"
 #include "BKE_blender.h"
 #include "BKE_brush.h"
 #include "BKE_cachefile.h"
@@ -78,6 +75,8 @@
 #include "ED_datafiles.h"
 
 #include "WM_api.h"
+
+#include "RNA_define.h"
 
 #ifdef WITH_FREESTYLE
 #  include "FRS_freestyle.h"
@@ -406,7 +405,6 @@ int main(
 	psys_init_rng();
 	/* end second init */
 
-	BKE_asset_engines_init();
 
 #if defined(WITH_PYTHON_MODULE) || defined(WITH_HEADLESS)
 	G.background = true; /* python module mode ALWAYS runs in background mode (for now) */

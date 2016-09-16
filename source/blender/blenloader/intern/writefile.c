@@ -673,14 +673,7 @@ static void write_iddata(void *wd, const ID *id)
 {
 	/* ID_WM's id->properties are considered runtime only, and never written in .blend file. */
 	if (id->properties && !ELEM(GS(id->name), ID_WM)) {
-		/* We want to write IDProps from 'virtual' libraries too, but not from 'real' linked datablocks... */
-		if (!id->uuid || (id->lib && (id->lib->flag & LIBRARY_FLAG_VIRTUAL))) {
-			IDP_WriteProperty(id->properties, wd);
-		}
-	}
-	if (id->uuid) {
-		BLI_assert(id->lib && id->lib->asset_repository);
-		writestruct(wd, DATA, AssetUUID, 1, id->uuid);
+		IDP_WriteProperty(id->properties, wd);
 	}
 }
 
@@ -3914,7 +3907,6 @@ static void write_libraries(WriteData *wd, Main *main)
 	bool found_one;
 
 	for (; main; main = main->next) {
-		BLI_assert(BLI_listbase_is_empty(&main->library));
 
 		a = tot = set_listbasepointers(main, lbarray);
 
@@ -3944,9 +3936,6 @@ static void write_libraries(WriteData *wd, Main *main)
 			writestruct(wd, ID_LI, Library, 1, main->curlib);
 			write_iddata(wd, &main->curlib->id);
 
-			BLI_assert(!(main->curlib->flag & LIBRARY_FLAG_VIRTUAL) ||
-			           (!main->curlib->packedfile && main->curlib->asset_repository));
-
 			if (main->curlib->packedfile) {
 				PackedFile *pf = main->curlib->packedfile;
 				writestruct(wd, DATA, PackedFile, 1, pf);
@@ -3956,57 +3945,15 @@ static void write_libraries(WriteData *wd, Main *main)
 				}
 			}
 
-			if (main->curlib->asset_repository) {
-				writestruct(wd, DATA, AssetRepositoryRef, 1, main->curlib->asset_repository);
-			}
-
-			if (main->curlib->flag & LIBRARY_FLAG_VIRTUAL) {
-				/* Those should be the only datatypes found in a virtual library! */
-				write_images   (wd, &main->image);
-				write_vfonts   (wd, &main->vfont);
-				write_texts    (wd, &main->text);
-				write_sounds   (wd, &main->sound);
-
-				BLI_assert(BLI_listbase_is_empty(&main->wm));
-				BLI_assert(BLI_listbase_is_empty(&main->screen));
-				BLI_assert(BLI_listbase_is_empty(&main->movieclip));
-				BLI_assert(BLI_listbase_is_empty(&main->mask));
-				BLI_assert(BLI_listbase_is_empty(&main->scene));
-				BLI_assert(BLI_listbase_is_empty(&main->curve));
-				BLI_assert(BLI_listbase_is_empty(&main->mball));
-				BLI_assert(BLI_listbase_is_empty(&main->camera));
-				BLI_assert(BLI_listbase_is_empty(&main->lamp));
-				BLI_assert(BLI_listbase_is_empty(&main->latt));
-				BLI_assert(BLI_listbase_is_empty(&main->key));
-				BLI_assert(BLI_listbase_is_empty(&main->world));
-				BLI_assert(BLI_listbase_is_empty(&main->speaker));
-				BLI_assert(BLI_listbase_is_empty(&main->group));
-				BLI_assert(BLI_listbase_is_empty(&main->armature));
-				BLI_assert(BLI_listbase_is_empty(&main->action));
-				BLI_assert(BLI_listbase_is_empty(&main->object));
-				BLI_assert(BLI_listbase_is_empty(&main->mat));
-				BLI_assert(BLI_listbase_is_empty(&main->tex));
-				BLI_assert(BLI_listbase_is_empty(&main->mesh));
-				BLI_assert(BLI_listbase_is_empty(&main->particle));
-				BLI_assert(BLI_listbase_is_empty(&main->nodetree));
-				BLI_assert(BLI_listbase_is_empty(&main->brush));
-				BLI_assert(BLI_listbase_is_empty(&main->palettes));
-				BLI_assert(BLI_listbase_is_empty(&main->paintcurves));
-				BLI_assert(BLI_listbase_is_empty(&main->gpencil));
-				BLI_assert(BLI_listbase_is_empty(&main->linestyle));
-			}
-			else {
-				while (a--) {
-					for (id = lbarray[a]->first; id; id = id->next) {
-						if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
-							if (!BKE_idcode_is_linkable(GS(id->name))) {
-								printf("ERROR: write file: datablock '%s' from lib '%s' is not linkable "
-									   "but is flagged as directly linked", id->name, main->curlib->filepath);
-								BLI_assert(0);
-							}
-							writestruct(wd, ID_ID, ID, 1, id);
-							write_iddata(wd, id);
+			while (a--) {
+				for (id = lbarray[a]->first; id; id = id->next) {
+					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
+						if (!BKE_idcode_is_linkable(GS(id->name))) {
+							printf("ERROR: write file: datablock '%s' from lib '%s' is not linkable "
+							       "but is flagged as directly linked", id->name, main->curlib->filepath);
+							BLI_assert(0);
 						}
+						writestruct(wd, ID_ID, ID, 1, id);
 					}
 				}
 			}

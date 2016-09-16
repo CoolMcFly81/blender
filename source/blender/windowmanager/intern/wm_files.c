@@ -554,11 +554,7 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 		
 		/* confusing this global... */
 		G.relbase_valid = 1;
-        retval = BKE_blendfile_read(C, filepath, reports);
-
-		printf("Updating assets for: %s\n", filepath);
-		WM_operator_name_call(C, "WM_OT_assets_update_check", WM_OP_EXEC_DEFAULT, NULL);
-
+		retval = BKE_blendfile_read(C, filepath, reports);
 		/* when loading startup.blend's, we can be left with a blank path */
 		if (G.main->name[0]) {
 			G.save_over = 1;
@@ -698,9 +694,6 @@ int wm_homefile_read(bContext *C, ReportList *reports, bool from_memory, const c
 	if (!from_memory) {
 		if (BLI_access(startstr, R_OK) == 0) {
 			success = (BKE_blendfile_read(C, startstr, NULL) != BKE_BLENDFILE_READ_FAIL);
-
-			printf("Updating assets for: %s\n", startstr);
-			WM_operator_name_call(C, "WM_OT_assets_update_check", WM_OP_EXEC_DEFAULT, NULL);
 		}
 		if (BLI_listbase_is_empty(&U.themes)) {
 			if (G.debug & G_DEBUG)

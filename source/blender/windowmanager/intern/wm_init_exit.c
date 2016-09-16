@@ -40,9 +40,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "RNA_define.h"
-#include "RNA_types.h"
-
 #include "DNA_genfile.h"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -57,7 +54,6 @@
 
 #include "BLO_writefile.h"
 
-#include "BKE_asset_engine.h"
 #include "BKE_blender.h"
 #include "BKE_blender_undo.h"
 #include "BKE_context.h"
@@ -92,6 +88,8 @@
 #endif
 #include "GHOST_Path-api.h"
 #include "GHOST_C-api.h"
+
+#include "RNA_define.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -506,9 +504,7 @@ void WM_exit_ext(bContext *C, const bool do_python)
 	/* render code might still access databases */
 	RE_FreeAllRender();
 	RE_engines_exit();
-
-	BKE_asset_engines_exit();
-
+	
 	ED_preview_free_dbase();  /* frees a Main dbase, before BKE_blender_free! */
 
 	if (C && wm)
