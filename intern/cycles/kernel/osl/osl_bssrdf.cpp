@@ -39,9 +39,7 @@
 #include "kernel_montecarlo.h"
 
 #include "closure/alloc.h"
-#include "closure/bsdf_util.h"
 #include "closure/bsdf_diffuse.h"
-#include "closure/bsdf_disney_diffuse.h"
 #include "closure/bssrdf.h"
 
 CCL_NAMESPACE_BEGIN
@@ -80,8 +78,6 @@ public:
 				bssrdf->albedo = albedo.x;
 				bssrdf->sharpness = sharpness;
 				bssrdf->N = params.N;
-				bssrdf->baseColor = params.baseColor;
-				bssrdf->roughness = params.roughness;
 				ccl_fetch(sd, flag) |= bssrdf_setup(bssrdf, (ClosureType)type);
 			}
 
@@ -93,8 +89,6 @@ public:
 				bssrdf->albedo = albedo.y;
 				bssrdf->sharpness = sharpness;
 				bssrdf->N = params.N;
-				bssrdf->baseColor = params.baseColor;
-				bssrdf->roughness = params.roughness;
 				ccl_fetch(sd, flag) |= bssrdf_setup(bssrdf, (ClosureType)type);
 			}
 
@@ -106,8 +100,6 @@ public:
 				bssrdf->albedo = albedo.z;
 				bssrdf->sharpness = sharpness;
 				bssrdf->N = params.N;
-				bssrdf->baseColor = params.baseColor;
-				bssrdf->roughness = params.roughness;
 				ccl_fetch(sd, flag) |= bssrdf_setup(bssrdf, (ClosureType)type);
 			}
 		}
@@ -187,33 +179,6 @@ ClosureParam *closure_bssrdf_burley_params()
 }
 
 CCLOSURE_PREPARE(closure_bssrdf_burley_prepare, BurleyBSSRDFClosure)
-
-/* Disney */
-
-class DisneyBSSRDFClosure : public CBSSRDFClosure {
-public:
-	void setup(ShaderData *sd, int path_flag, float3 weight)
-	{
-		alloc(sd, path_flag, weight, CLOSURE_BSSRDF_DISNEY_ID);
-	}
-};
-
-ClosureParam *closure_bssrdf_disney_params()
-{
-	static ClosureParam params[] = {
-		CLOSURE_FLOAT3_PARAM(DisneyBSSRDFClosure, params.N),
-		CLOSURE_FLOAT3_PARAM(DisneyBSSRDFClosure, radius),
-		CLOSURE_FLOAT_PARAM(DisneyBSSRDFClosure, params.texture_blur),
-		CLOSURE_FLOAT3_PARAM(DisneyBSSRDFClosure, params.baseColor),
-		CLOSURE_FLOAT3_PARAM(DisneyBSSRDFClosure, albedo),
-		CLOSURE_FLOAT_PARAM(DisneyBSSRDFClosure, params.roughness),
-		CLOSURE_STRING_KEYPARAM(DisneyBSSRDFClosure, label, "label"),
-		CLOSURE_FINISH_PARAM(DisneyBSSRDFClosure)
-	};
-	return params;
-}
-
-CCLOSURE_PREPARE(closure_bssrdf_disney_prepare, DisneyBSSRDFClosure)
 
 CCL_NAMESPACE_END
 
