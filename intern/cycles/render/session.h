@@ -45,7 +45,10 @@ public:
 	DeviceInfo device;
 	bool background;
 	bool progressive_refine;
+
 	string output_path;
+	bool flip_output;
+	bool output_half_float;
 
 	bool progressive;
 	bool experimental;
@@ -55,7 +58,14 @@ public:
 	int start_resolution;
 	int threads;
 
+	bool denoise_result;
+
 	bool display_buffer_linear;
+
+	bool only_denoise;
+	int half_window;
+	float filter_strength;
+	int prev_frames;
 
 	double cancel_timeout;
 	double reset_timeout;
@@ -68,7 +78,10 @@ public:
 	{
 		background = false;
 		progressive_refine = false;
+
 		output_path = "";
+		flip_output = true;
+		output_half_float = false;
 
 		progressive = false;
 		experimental = false;
@@ -77,7 +90,14 @@ public:
 		start_resolution = INT_MAX;
 		threads = 0;
 
+		denoise_result = false;
+
 		display_buffer_linear = false;
+
+		only_denoise = false;
+		half_window = 8;
+		filter_strength = 1.0f;
+		prev_frames = 0;
 
 		cancel_timeout = 0.1;
 		reset_timeout = 0.1;
@@ -94,12 +114,19 @@ public:
 		&& background == params.background
 		&& progressive_refine == params.progressive_refine
 		&& output_path == params.output_path
+		&& flip_output == params.flip_output
+		&& output_half_float == params.output_half_float
 		/* && samples == params.samples */
 		&& progressive == params.progressive
 		&& experimental == params.experimental
 		&& tile_size == params.tile_size
 		&& start_resolution == params.start_resolution
 		&& threads == params.threads
+		&& denoise_result == params.denoise_result
+		&& only_denoise == params.only_denoise
+		&& half_window == params.half_window
+		&& filter_strength == params.filter_strength
+		&& prev_frames == params.prev_frames
 		&& display_buffer_linear == params.display_buffer_linear
 		&& cancel_timeout == params.cancel_timeout
 		&& reset_timeout == params.reset_timeout
@@ -127,12 +154,13 @@ public:
 	Stats stats;
 
 	function<void(RenderTile&)> write_render_tile_cb;
-	function<void(RenderTile&)> update_render_tile_cb;
+	function<void(RenderTile&, bool)> update_render_tile_cb;
 
 	explicit Session(const SessionParams& params);
 	~Session();
 
 	void start();
+	void start_denoise();
 	bool draw(BufferParams& params, DeviceDrawParams& draw_params);
 	void wait();
 
@@ -155,11 +183,12 @@ protected:
 	} delayed_reset;
 
 	void run();
+	void run_denoise();
 
 	void update_status_time(bool show_pause = false, bool show_done = false);
 
 	void tonemap(int sample);
-	void path_trace();
+	void render();
 	void reset_(BufferParams& params, int samples);
 
 	void run_cpu();
@@ -173,8 +202,7 @@ protected:
 	bool acquire_tile(Device *tile_device, RenderTile& tile);
 	void update_tile_sample(RenderTile& tile);
 	void release_tile(RenderTile& tile);
-
-	void update_progress_sample();
+	void get_neighbor_tiles(RenderTile *tiles);
 
 	bool device_use_gl;
 
@@ -195,10 +223,7 @@ protected:
 
 	bool kernels_loaded;
 
-	double start_time;
 	double reset_time;
-	double preview_time;
-	double paused_time;
 
 	/* progressive refine */
 	double last_update_time;

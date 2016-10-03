@@ -27,7 +27,7 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 {
 	/* initialize master radiance accumulator */
 	kernel_assert(kernel_data.film.use_light_pass);
-	path_radiance_init(L, kernel_data.film.use_light_pass);
+	path_radiance_init(L, kernel_data.film.use_light_pass, kernel_data.film.light_groups);
 
 	PathRadiance L_sample;
 	PathState state;
@@ -45,7 +45,7 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 #endif
 
 	/* init radiance */
-	path_radiance_init(&L_sample, kernel_data.film.use_light_pass);
+	path_radiance_init(&L_sample, kernel_data.film.use_light_pass, kernel_data.film.light_groups);
 
 	/* init path state */
 	path_state_init(kg, &emission_sd, &state, &rng, sample, NULL);
@@ -68,8 +68,8 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 
 		/* sample emission */
 		if((pass_filter & BAKE_FILTER_EMISSION) && (sd->flag & SD_EMISSION)) {
-			float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf);
-			path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce);
+			float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf, NULL);
+			path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce, 0);
 		}
 
 		bool is_sss_sample = false;
@@ -115,7 +115,7 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 
 		/* sample light and BSDF */
 		if(!is_sss_sample && (pass_filter & (BAKE_FILTER_DIRECT | BAKE_FILTER_INDIRECT))) {
-			kernel_path_surface_connect_light(kg, &rng, sd, &emission_sd, throughput, &state, &L_sample);
+			kernel_path_surface_connect_light(kg, &rng, sd, &emission_sd, throughput, &state, &L_sample, NULL);
 
 			if(kernel_path_surface_bounce(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
 #ifdef __LAMP_MIS__
@@ -141,8 +141,8 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 
 		/* sample emission */
 		if((pass_filter & BAKE_FILTER_EMISSION) && (sd->flag & SD_EMISSION)) {
-			float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf);
-			path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce);
+			float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf, NULL);
+			path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce, 0);
 		}
 
 #ifdef __SUBSURFACE__
@@ -161,7 +161,7 @@ ccl_device_inline void compute_light_pass(KernelGlobals *kg,
 			if(kernel_data.integrator.use_direct_light) {
 				int all = kernel_data.integrator.sample_all_lights_direct;
 				kernel_branched_path_surface_connect_light(kg, &rng,
-					sd, &emission_sd, &state, throughput, 1.0f, &L_sample, all);
+					sd, &emission_sd, &state, throughput, 1.0f, &L_sample, all, NULL);
 			}
 #endif
 
@@ -291,7 +291,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int num_samples = kernel_data.integrator.aa_samples;
 
 	/* random number generator */
-	RNG rng = cmj_hash(offset + i, kernel_data.integrator.seed);
+	RNG rng = path_rng_hash(offset + i, kernel_data.integrator.seed);
 
 	float filter_x, filter_y;
 	if(sample == 0) {
@@ -320,7 +320,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	                         P, Ng, Ng,
 	                         shader, object, prim,
 	                         u, v, 1.0f, 0.5f,
-	                         !(kernel_tex_fetch(__object_flag, object) & SD_TRANSFORM_APPLIED));
+	                         !(kernel_tex_fetch(__object_flag, object) & SD_TRANSFORM_APPLIED),
+	                         LAMP_NONE);
 	sd.I = sd.N;
 
 	/* update differentials */

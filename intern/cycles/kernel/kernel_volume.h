@@ -408,7 +408,7 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_homogeneous(KernelGloba
 		float3 sigma_t = coeff.sigma_a + coeff.sigma_s;
 		float3 transmittance = volume_color_transmittance(sigma_t, ray->t);
 		float3 emission = kernel_volume_emission_integrate(&coeff, closure_flag, transmittance, ray->t);
-		path_radiance_accum_emission(L, *throughput, emission, state->bounce);
+		path_radiance_accum_emission(L, *throughput, emission, state->bounce, 0);
 	}
 
 	/* modify throughput */
@@ -523,7 +523,7 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_heterogeneous_distance(
 			/* integrate emission attenuated by absorption */
 			if(L && (closure_flag & SD_EMISSION)) {
 				float3 emission = kernel_volume_emission_integrate(&coeff, closure_flag, transmittance, dt);
-				path_radiance_accum_emission(L, tp, emission, state->bounce);
+				path_radiance_accum_emission(L, tp, emission, state->bounce, 0);
 			}
 
 			/* modify throughput */
@@ -572,7 +572,7 @@ ccl_device_noinline VolumeIntegrateResult kernel_volume_integrate(KernelGlobals 
 	/* workaround to fix correlation bug in T38710, can find better solution
 	 * in random number generator later, for now this is done here to not impact
 	 * performance of rendering without volumes */
-	RNG tmp_rng = cmj_hash(*rng, state->rng_offset);
+	RNG tmp_rng = path_rng_hash(*rng, state->rng_offset);
 
 	shader_setup_from_volume(kg, sd, ray);
 

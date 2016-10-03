@@ -57,6 +57,9 @@ public:
 
 	float exposure;
 	array<Pass> passes;
+	bool denoising_passes;
+	bool selective_denoising;
+	int denoise_flags;
 	float pass_alpha_threshold;
 
 	FilterType filter_type;
@@ -71,6 +74,10 @@ public:
 	bool use_sample_clamp;
 
 	bool need_update;
+
+	int light_groups;
+	int num_light_groups;
+	int world_light_groups;
 
 	Film();
 	~Film();

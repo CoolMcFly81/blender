@@ -30,6 +30,44 @@
 
 CCL_NAMESPACE_BEGIN
 
+typedef enum DenoiseExtendedTypes {
+	EX_TYPE_NONE                      = 0,
+	EX_TYPE_DENOISE_NORMAL            = (1 << 0),
+	EX_TYPE_DENOISE_NORMAL_VAR        = (1 << 1),
+	EX_TYPE_DENOISE_ALBEDO            = (1 << 2),
+	EX_TYPE_DENOISE_ALBEDO_VAR        = (1 << 3),
+	EX_TYPE_DENOISE_DEPTH             = (1 << 4),
+	EX_TYPE_DENOISE_DEPTH_VAR         = (1 << 5),
+	EX_TYPE_DENOISE_SHADOW_A          = (1 << 6),
+	EX_TYPE_DENOISE_SHADOW_B          = (1 << 7),
+	EX_TYPE_DENOISE_NOISY             = (1 << 8),
+	EX_TYPE_DENOISE_NOISY_VAR         = (1 << 9),
+	EX_TYPE_DENOISE_CLEAN             = (1 << 10),
+
+	EX_TYPE_DENOISE_REQUIRED = (EX_TYPE_DENOISE_NORMAL
+	                          | EX_TYPE_DENOISE_NORMAL_VAR
+	                          | EX_TYPE_DENOISE_ALBEDO
+	                          | EX_TYPE_DENOISE_ALBEDO_VAR
+	                          | EX_TYPE_DENOISE_DEPTH
+	                          | EX_TYPE_DENOISE_DEPTH_VAR
+	                          | EX_TYPE_DENOISE_SHADOW_A
+	                          | EX_TYPE_DENOISE_SHADOW_B
+	                          | EX_TYPE_DENOISE_NOISY
+	                          | EX_TYPE_DENOISE_NOISY_VAR),
+	EX_TYPE_DENOISE_ALL = EX_TYPE_DENOISE_REQUIRED | EX_TYPE_DENOISE_CLEAN,
+} DenoiseExtendedTypes;
+
+typedef enum LightGroupExtendedTypes {
+	EX_TYPE_LIGHT_GROUP_1             = (1 << 11),
+	EX_TYPE_LIGHT_GROUP_2             = (1 << 12),
+	EX_TYPE_LIGHT_GROUP_3             = (1 << 13),
+	EX_TYPE_LIGHT_GROUP_4             = (1 << 14),
+	EX_TYPE_LIGHT_GROUP_5             = (1 << 15),
+	EX_TYPE_LIGHT_GROUP_6             = (1 << 16),
+	EX_TYPE_LIGHT_GROUP_7             = (1 << 17),
+	EX_TYPE_LIGHT_GROUP_8             = (1 << 18),
+} LightGroupExtendedTypes;
+
 class Device;
 struct DeviceDrawParams;
 struct float4;
@@ -43,14 +81,29 @@ public:
 	int width;
 	int height;
 
+	/* number of frames stored in this buffer (used for standalone denoising) */
+	int frames;
+
 	/* offset into and width/height of the full buffer */
 	int full_x;
 	int full_y;
 	int full_width;
 	int full_height;
 
+	/* the width/height of the part that will be visible (might be smaller due to overscan). */
+	int final_width;
+	int final_height;
+
 	/* passes */
 	array<Pass> passes;
+	bool denoising_passes;
+	/* If only some light path types should be denoised, an additional pass is needed. */
+	bool selective_denoising;
+	/* On GPUs, tiles are extended in each direction to include all the info required for denoising. */
+	int overscan;
+
+	int light_groups;
+	int num_light_groups;
 
 	/* functions */
 	BufferParams();
@@ -59,6 +112,8 @@ public:
 	bool modified(const BufferParams& params);
 	void add_pass(PassType type);
 	int get_passes_size();
+	int get_denoise_offset();
+	int get_light_groups_offset();
 };
 
 /* Render Buffers */
@@ -79,10 +134,13 @@ public:
 	void reset(Device *device, BufferParams& params);
 
 	bool copy_from_device();
-	bool get_pass_rect(PassType type, float exposure, int sample, int components, float *pixels);
+	bool copy_to_device();
+	bool get_pass_rect(PassType type, float exposure, int sample, int components, int4 rect, float *pixels, bool read_pixels = false, int frame = 0);
+	bool get_denoising_rect(int denoising_pass, float exposure, int sample, int components, int4 rect, float *pixels, bool read_pixels = false, int frame = 0);
 
 protected:
 	void device_free();
+	int4 rect_to_local(int4 rect);
 
 	Device *device;
 };
@@ -107,6 +165,8 @@ public:
 	/* byte buffer for converted result */
 	device_vector<uchar4> rgba_byte;
 	device_vector<half4> rgba_half;
+	/* flip the image while writing? */
+	bool flip_image;
 
 	DisplayBuffer(Device *device, bool linear = false);
 	~DisplayBuffer();
@@ -131,6 +191,9 @@ protected:
 
 class RenderTile {
 public:
+	typedef enum { PATH_TRACE, DENOISE } Task;
+
+	Task task;
 	int x, y, w, h;
 	int start_sample;
 	int num_samples;
@@ -138,6 +201,7 @@ public:
 	int resolution;
 	int offset;
 	int stride;
+	int tile_index;
 
 	device_ptr buffer;
 	device_ptr rng_state;

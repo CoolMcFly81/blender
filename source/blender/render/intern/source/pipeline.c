@@ -238,7 +238,7 @@ void RE_FreeRenderResult(RenderResult *res)
 	render_result_free(res);
 }
 
-float *RE_RenderLayerGetPass(volatile RenderLayer *rl, int passtype, const char *viewname)
+float *RE_RenderLayerGetPass(volatile RenderLayer *rl, uint64_t passtype, const char *viewname)
 {
 	RenderPass *rpass = RE_pass_find_by_type(rl, passtype, viewname);
 	return rpass ? rpass->rect : NULL;
@@ -1854,6 +1854,7 @@ static void render_result_uncrop(Render *re)
 
 			rres = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, RR_ALL_VIEWS);
 
+			render_result_clone_passes(re, rres, NULL);
 			render_result_merge(rres, re->result);
 			render_result_free(re->result);
 			re->result = rres;
@@ -4011,7 +4012,7 @@ bool RE_layers_have_name(struct RenderResult *rr)
 	return false;
 }
 
-RenderPass *RE_pass_find_by_type(volatile RenderLayer *rl, int passtype, const char *viewname)
+RenderPass *RE_pass_find_by_type(volatile RenderLayer *rl, uint64_t passtype, const char *viewname)
 {
 	RenderPass *rp = NULL;
 
