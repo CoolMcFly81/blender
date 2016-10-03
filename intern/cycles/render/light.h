@@ -50,8 +50,6 @@ public:
 	float3 axisv;
 	float sizev;
 
-	Transform tfm;
-
 	int map_resolution;
 
 	float spot_angle;
@@ -70,8 +68,6 @@ public:
 	Shader *shader;
 	int samples;
 	int max_bounces;
-
-	int light_groups;
 
 	void tag_update(Scene *scene);
 
