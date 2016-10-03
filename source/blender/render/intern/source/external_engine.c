@@ -68,7 +68,7 @@
 static RenderEngineType internal_render_type = {
 	NULL, NULL,
 	"BLENDER_RENDER", N_("Blender Render"), RE_INTERNAL,
-	NULL, NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -77,7 +77,7 @@ static RenderEngineType internal_render_type = {
 static RenderEngineType internal_game_type = {
 	NULL, NULL,
 	"BLENDER_GAME", N_("Blender Game"), RE_INTERNAL | RE_GAME,
-	NULL, NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -212,6 +212,8 @@ RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, 
 
 	/* can be NULL if we CLAMP the width or height to 0 */
 	if (result) {
+		render_result_clone_passes(re, result, viewname);
+
 		RenderPart *pa;
 
 		/* Copy EXR tile settings, so pipeline knows whether this is a result
@@ -245,7 +247,18 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
 	}
 }
 
-void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel, int merge_results)
+void RE_engine_add_pass(RenderEngine *engine, int passtype, int channels, const char *layername, const char *viewname)
+{
+	Render *re = engine->re;
+
+	if(!re || !re->result) {
+		return;
+	}
+
+	render_result_add_pass(re->result, ((uint64_t)1)<<passtype, channels, layername, viewname);
+}
+
+void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel, int highlight, int merge_results)
 {
 	Render *re = engine->re;
 
@@ -254,7 +267,7 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 	}
 
 	/* merge. on break, don't merge in result for preview renders, looks nicer */
-	if (!cancel) {
+	if (!highlight) {
 		/* for exr tile render, detect tiles that are done */
 		RenderPart *pa = get_part_from_result(re, result);
 
@@ -583,6 +596,29 @@ static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
 	prop = RNA_struct_find_property(&ptr, "layers_exclude");
 
 	return RNA_property_animated(&ptr, prop);
+}
+
+void RE_engine_postprocess(Scene *scene, Render *re, RenderResult *rr)
+{
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	RenderEngine *engine = RE_engine_create(type);
+
+	engine->re = re;
+	engine->re->result = rr;
+	engine->re->r = scene->r;
+	engine->re->rectx = rr->rectx;
+	engine->re->recty = rr->recty;
+	engine->re->disprect.xmin = 0;
+	engine->re->disprect.xmin = 0;
+	engine->re->disprect.xmax = rr->rectx;
+	engine->re->disprect.xmax = rr->recty;
+	RE_parts_init(engine->re, false);
+	engine->tile_x = engine->re->partx;
+	engine->tile_y = engine->re->party;
+
+	type->postprocess(engine, scene, rr);
+
+	RE_engine_free(engine);
 }
 
 int RE_engine_render(Render *re, int do_all)

@@ -16,12 +16,38 @@
 
 CCL_NAMESPACE_BEGIN
 
-#if defined(__BRANCHED_PATH__) || defined(__SUBSURFACE__)
+#if defined(__BRANCHED_PATH__) || defined(__SUBSURFACE__) || defined(__SHADOW_TRICKS__)
+
+ccl_device_inline void kernel_branched_path_update_shadow(float *shadow_info, float unoccluded, float occluded, bool &odd_buffer)
+{
+	/* The A buffer counts the total shadow samples in the 4th component. */
+	shadow_info[3] += 1.0f;
+
+	if(shadow_info[3] > 1.0f) {
+		if(odd_buffer) shadow_info += 4;
+
+		float old_shadowing = shadow_info[1] / max(shadow_info[0], 1e-7f);
+		shadow_info[0] += unoccluded;
+		shadow_info[1] += occluded;
+		float new_shadowing = shadow_info[1] / max(shadow_info[0], 1e-7f);
+		float cur_shadowing = occluded / max(unoccluded, 1e-7f);
+		shadow_info[2] += (cur_shadowing - old_shadowing) * (cur_shadowing - new_shadowing);
+	}
+	else {
+		if(odd_buffer) shadow_info += 4;
+
+		shadow_info[0] += unoccluded;
+		shadow_info[1] += occluded;
+		shadow_info[2] = 0.0f;
+	}
+
+	odd_buffer = !odd_buffer;
+}
 
 /* branched path tracing: connect path directly to position on one or more lights and add it to L */
 ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RNG *rng,
 	ShaderData *sd, ShaderData *emission_sd, PathState *state, float3 throughput,
-	float num_samples_adjust, PathRadiance *L, int sample_all_lights)
+	float num_samples_adjust, PathRadiance *L, int sample_all_lights, float *shadow_info)
 {
 #ifdef __EMISSION__
 	/* sample illumination from lights to find path contribution */
@@ -36,6 +62,8 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobal
 	light_ray.time = ccl_fetch(sd, time);
 #  endif
 
+	bool odd_buffer = (shadow_info && ((((int) shadow_info[3]) % 2) == 0));
+
 	if(sample_all_lights) {
 		/* lamp sampling */
 		for(int i = 0; i < kernel_data.integrator.num_all_lights; i++) {
@@ -44,28 +72,44 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobal
 
 			int num_samples = ceil_to_int(num_samples_adjust*light_select_num_samples(kg, i));
 			float num_samples_inv = num_samples_adjust/(num_samples*kernel_data.integrator.num_all_lights);
-			RNG lamp_rng = cmj_hash(*rng, i);
+			RNG lamp_rng = path_rng_hash(*rng, i);
 
 			for(int j = 0; j < num_samples; j++) {
 				float light_u, light_v;
 				path_branched_rng_2D(kg, &lamp_rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
+				float terminate = path_branched_rng_1D_for_decision(kg, &lamp_rng, state, j, num_samples, PRNG_LIGHT_TERMINATE);
 
 				LightSample ls;
+				float unoccluded = 0.0f, occluded = 0.0f;
 				if(lamp_light_sample(kg, i, light_u, light_v, ccl_fetch(sd, P), &ls)) {
 					/* The sampling probability returned by lamp_light_sample assumes that all lights were sampled.
 					 * However, this code only samples lamps, so if the scene also had mesh lights, the real probability is twice as high. */
 					if(kernel_data.integrator.pdf_triangles != 0.0f)
 						ls.pdf *= 2.0f;
 
-					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
+					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
 						/* trace shadow ray */
 						float3 shadow;
+						float3 light_unoccluded;
+						if(shadow_info) {
+							light_unoccluded = throughput * bsdf_eval_sum(&L_light) * (1.0f / L_light.mis_weight);
+							unoccluded = average(light_unoccluded);
+						}
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
+							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							if(shadow_info) {
+								occluded = average(light_unoccluded*shadow);
+							}
+						}
+						else {
+							path_radiance_accum_total_light(L, throughput*num_samples_inv, &L_light);
 						}
 					}
+				}
+				if(shadow_info) {
+					kernel_branched_path_update_shadow(shadow_info, unoccluded, occluded, odd_buffer);
 				}
 			}
 		}
@@ -79,26 +123,42 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobal
 				float light_t = path_branched_rng_1D(kg, rng, state, j, num_samples, PRNG_LIGHT);
 				float light_u, light_v;
 				path_branched_rng_2D(kg, rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
+				float terminate = path_branched_rng_1D_for_decision(kg, rng, state, j, num_samples, PRNG_LIGHT_TERMINATE);
 
 				/* only sample triangle lights */
 				if(kernel_data.integrator.num_all_lights)
 					light_t = 0.5f*light_t;
 
 				LightSample ls;
+				float unoccluded = 0.0f, occluded = 0.0f;
 				if(light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls)) {
 					/* Same as above, probability needs to be corrected since the sampling was forced to select a mesh light. */
 					if(kernel_data.integrator.num_all_lights)
 						ls.pdf *= 2.0f;
 
-					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
+					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
 						/* trace shadow ray */
 						float3 shadow;
+						float3 light_unoccluded;
+						if(shadow_info) {
+							light_unoccluded = throughput * bsdf_eval_sum(&L_light) * (1.0f / L_light.mis_weight);
+							unoccluded = average(light_unoccluded);
+						}
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
+							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							if(shadow_info) {
+								occluded = average(light_unoccluded*shadow);
+							}
+						}
+						else {
+							path_radiance_accum_total_light(L, throughput*num_samples_inv, &L_light);
 						}
 					}
+				}
+				if(shadow_info) {
+					kernel_branched_path_update_shadow(shadow_info, unoccluded, occluded, odd_buffer);
 				}
 			}
 		}
@@ -108,19 +168,33 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobal
 		float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
 		float light_u, light_v;
 		path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
+		float terminate = path_state_rng_1D_for_decision(kg, rng, state, PRNG_LIGHT_TERMINATE);
 
 		LightSample ls;
+		float unoccluded = 0.0f, occluded = 0.0f;
 		if(light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls)) {
 			/* sample random light */
-			if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
+			if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
 				/* trace shadow ray */
 				float3 shadow;
+				float3 light_unoccluded;
+				if(shadow_info) {
+					light_unoccluded = throughput * bsdf_eval_sum(&L_light) * (1.0f / L_light.mis_weight);
+					unoccluded = average(light_unoccluded);
+				}
 
 				if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 					/* accumulate */
-					path_radiance_accum_light(L, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, state->bounce, is_lamp);
+					path_radiance_accum_light(L, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+					if(shadow_info) {
+						occluded = average(light_unoccluded*shadow);
+					}
+				}
+				else {
+					path_radiance_accum_total_light(L, throughput*num_samples_adjust, &L_light);
 				}
 			}
+			kernel_branched_path_update_shadow(shadow_info, unoccluded, occluded, odd_buffer);
 		}
 	}
 #endif
@@ -189,11 +263,27 @@ ccl_device bool kernel_branched_path_surface_bounce(KernelGlobals *kg, RNG *rng,
 /* path tracing: connect path directly to position on a light and add it to L */
 ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, ccl_addr_space RNG *rng,
 	ShaderData *sd, ShaderData *emission_sd, float3 throughput, ccl_addr_space PathState *state,
-	PathRadiance *L)
+	PathRadiance *L, float2 *shadow_info)
 {
 #ifdef __EMISSION__
 	if(!(kernel_data.integrator.use_direct_light && (ccl_fetch(sd, flag) & SD_BSDF_HAS_EVAL)))
 		return;
+
+#ifdef __SHADOW_TRICKS__
+	if(state->flag & PATH_RAY_SHADOW_CATCHER) {
+		kernel_branched_path_surface_connect_light(kg,
+		                                           rng,
+		                                           sd,
+		                                           emission_sd,
+		                                           state,
+		                                           throughput,
+		                                           1.0f,
+		                                           L,
+		                                           1,
+                                                           NULL);
+		return;
+	}
+#endif
 
 	/* sample illumination from lights to find path contribution */
 	float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
@@ -210,14 +300,26 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, ccl_
 
 	LightSample ls;
 	if(light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls)) {
-		if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
+		float terminate = path_state_rng_1D_for_decision(kg, rng, state, PRNG_LIGHT_TERMINATE);
+		if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
 			/* trace shadow ray */
 			float3 shadow;
+			float3 light_unoccluded;
+			if(shadow_info) {
+				light_unoccluded = throughput * bsdf_eval_sum(&L_light) * (1.0f / L_light.mis_weight);
+				shadow_info->x = average(light_unoccluded);
+			}
 
 			if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 				/* accumulate */
-				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
+				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+				if(shadow_info) {
+					shadow_info->y = average(light_unoccluded*shadow);
+				}
 			}
+		}
+		else {
+			path_radiance_accum_total_light(L, throughput, &L_light);
 		}
 	}
 #endif

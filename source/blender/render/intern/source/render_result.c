@@ -173,7 +173,7 @@ void render_result_views_shallowdelete(RenderResult *rr)
 	}
 }
 
-static const char *name_from_passtype(int passtype, int channel)
+static const char *name_from_passtype(uint64_t passtype, int channel)
 {
 	if (passtype == SCE_PASS_COMBINED) {
 		if (channel == -1) return "Combined";
@@ -356,10 +356,130 @@ static const char *name_from_passtype(int passtype, int channel)
 		if (channel == 1) return "SubsurfaceCol.G";
 		return "SubsurfaceCol.B";
 	}
+	if (passtype == SCE_PASS_DENOISE_NORMAL) {
+		if (channel == -1) return "DenoiseNormal";
+		if (channel == 0) return "DenoiseNormal.X";
+		if (channel == 1) return "DenoiseNormal.Y";
+		return "DenoiseNormal.Z";
+	}
+	if (passtype == SCE_PASS_DENOISE_NORMAL_VAR) {
+		if (channel == -1) return "DenoiseNormalVar";
+		if (channel == 0) return "DenoiseNormalVar.X";
+		if (channel == 1) return "DenoiseNormalVar.Y";
+		return "DenoiseNormalVar.Z";
+	}
+	if (passtype == SCE_PASS_DENOISE_ALBEDO) {
+		if (channel == -1) return "DenoiseAlbedo";
+		if (channel == 0) return "DenoiseAlbedo.R";
+		if (channel == 1) return "DenoiseAlbedo.G";
+		return "DenoiseAlbedo.B";
+	}
+	if (passtype == SCE_PASS_DENOISE_ALBEDO_VAR) {
+		if (channel == -1) return "DenoiseAlbedoVar";
+		if (channel == 0) return "DenoiseAlbedoVar.R";
+		if (channel == 1) return "DenoiseAlbedoVar.G";
+		return "DenoiseAlbedoVar.B";
+	}
+	if (passtype == SCE_PASS_DENOISE_SHADOW_A) {
+		if (channel == -1) return "DenoiseShadowA";
+		if (channel == 0) return "DenoiseShadowA.R";
+		if (channel == 1) return "DenoiseShadowA.G";
+		if (channel == 2) return "DenoiseShadowA.B";
+		return "DenoiseShadowA.A";
+	}
+	if (passtype == SCE_PASS_DENOISE_SHADOW_B) {
+		if (channel == -1) return "DenoiseShadowB";
+		if (channel == 0) return "DenoiseShadowB.R";
+		if (channel == 1) return "DenoiseShadowB.G";
+		return "DenoiseShadowB.B";
+	}
+	if (passtype == SCE_PASS_DENOISE_DEPTH) {
+		if (channel == -1) return "DenoiseDepth";
+		return "DenoiseDepth.Z";
+	}
+	if (passtype == SCE_PASS_DENOISE_DEPTH_VAR) {
+		if (channel == -1) return "DenoiseDepthVar";
+		return "DenoiseDepthVar.Z";
+	}
+	if (passtype == SCE_PASS_DENOISE_NOISY) {
+		if (channel == -1) return "DenoiseNoisy";
+		if (channel == 0) return "DenoiseNoisy.R";
+		if (channel == 1) return "DenoiseNoisy.G";
+		return "DenoiseNoisy.B";
+	}
+	if (passtype == SCE_PASS_DENOISE_NOISY_VAR) {
+		if (channel == -1) return "DenoiseNoisyVar";
+		if (channel == 0) return "DenoiseNoisyVar.R";
+		if (channel == 1) return "DenoiseNoisyVar.G";
+		return "DenoiseNoisyVar.B";
+	}
+	if (passtype == SCE_PASS_DENOISE_CLEAN) {
+		if (channel == -1) return "DenoiseClean";
+		if (channel == 0) return "DenoiseClean.R";
+		if (channel == 1) return "DenoiseClean.G";
+		return "DenoiseClean.B";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_1) {
+		if (channel == -1) return "LightGroup1";
+		if (channel == 0) return "LightGroup1.R";
+		if (channel == 1) return "LightGroup1.G";
+		if (channel == 2) return "LightGroup1.B";
+		return "LightGroup1.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_2) {
+		if (channel == -1) return "LightGroup2";
+		if (channel == 0) return "LightGroup2.R";
+		if (channel == 1) return "LightGroup2.G";
+		if (channel == 2) return "LightGroup2.B";
+		return "LightGroup2.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_3) {
+		if (channel == -1) return "LightGroup3";
+		if (channel == 0) return "LightGroup3.R";
+		if (channel == 1) return "LightGroup3.G";
+		if (channel == 2) return "LightGroup3.B";
+		return "LightGroup3.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_4) {
+		if (channel == -1) return "LightGroup4";
+		if (channel == 0) return "LightGroup4.R";
+		if (channel == 1) return "LightGroup4.G";
+		if (channel == 2) return "LightGroup4.B";
+		return "LightGroup4.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_5) {
+		if (channel == -1) return "LightGroup5";
+		if (channel == 0) return "LightGroup5.R";
+		if (channel == 1) return "LightGroup5.G";
+		if (channel == 2) return "LightGroup5.B";
+		return "LightGroup5.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_6) {
+		if (channel == -1) return "LightGroup6";
+		if (channel == 0) return "LightGroup6.R";
+		if (channel == 1) return "LightGroup6.G";
+		if (channel == 2) return "LightGroup6.B";
+		return "LightGroup6.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_7) {
+		if (channel == -1) return "LightGroup7";
+		if (channel == 0) return "LightGroup7.R";
+		if (channel == 1) return "LightGroup7.G";
+		if (channel == 2) return "LightGroup7.B";
+		return "LightGroup7.A";
+	}
+	if (passtype == SCE_PASS_LIGHT_GROUP_8) {
+		if (channel == -1) return "LightGroup8";
+		if (channel == 0) return "LightGroup8.R";
+		if (channel == 1) return "LightGroup8.G";
+		if (channel == 2) return "LightGroup8.B";
+		return "LightGroup8.A";
+	}
+
 	return "Unknown";
 }
 
-static int passtype_from_name(const char *str, int passflag)
+static uint64_t passtype_from_name(const char *str, uint64_t passflag)
 {
 	/* We do not really support several pass of the same types, so in case we are opening an EXR file with several pass
 	 * names detected as same pass type, only return that pass type the first time, and return 'uknown' for the others.
@@ -459,13 +579,70 @@ static int passtype_from_name(const char *str, int passflag)
 	if (STRPREFIX(str, "SubsurfaceCol"))
 		RETURN_PASS(SCE_PASS_SUBSURFACE_COLOR);
 
+	if (STRPREFIX(str, "DenoiseNormal"))
+		RETURN_PASS(SCE_PASS_DENOISE_NORMAL);
+
+	if (STRPREFIX(str, "DenoiseNormalVar"))
+		RETURN_PASS(SCE_PASS_DENOISE_NORMAL_VAR);
+
+	if (STRPREFIX(str, "DenoiseAlbedo"))
+		RETURN_PASS(SCE_PASS_DENOISE_ALBEDO);
+
+	if (STRPREFIX(str, "DenoiseAlbedoVar"))
+		RETURN_PASS(SCE_PASS_DENOISE_ALBEDO_VAR);
+
+	if (STRPREFIX(str, "DenoiseDepth"))
+		RETURN_PASS(SCE_PASS_DENOISE_DEPTH);
+
+	if (STRPREFIX(str, "DenoiseDepthVar"))
+		RETURN_PASS(SCE_PASS_DENOISE_DEPTH_VAR);
+
+	if (STRPREFIX(str, "DenoiseShadowA"))
+		RETURN_PASS(SCE_PASS_DENOISE_SHADOW_A);
+
+	if (STRPREFIX(str, "DenoiseShadowB"))
+		RETURN_PASS(SCE_PASS_DENOISE_SHADOW_B);
+
+	if (STRPREFIX(str, "DenoiseNoisy"))
+		RETURN_PASS(SCE_PASS_DENOISE_NOISY);
+
+	if (STRPREFIX(str, "DenoiseNoisyVar"))
+		RETURN_PASS(SCE_PASS_DENOISE_NOISY_VAR);
+
+	if (STRPREFIX(str, "DenoiseClean"))
+		RETURN_PASS(SCE_PASS_DENOISE_CLEAN);
+
+	if (STRPREFIX(str, "LightGroup1"))
+		return SCE_PASS_LIGHT_GROUP_1;
+
+	if (STRPREFIX(str, "LightGroup2"))
+		return SCE_PASS_LIGHT_GROUP_2;
+
+	if (STRPREFIX(str, "LightGroup3"))
+		return SCE_PASS_LIGHT_GROUP_3;
+
+	if (STRPREFIX(str, "LightGroup4"))
+		return SCE_PASS_LIGHT_GROUP_4;
+
+	if (STRPREFIX(str, "LightGroup5"))
+		return SCE_PASS_LIGHT_GROUP_5;
+
+	if (STRPREFIX(str, "LightGroup6"))
+		return SCE_PASS_LIGHT_GROUP_6;
+
+	if (STRPREFIX(str, "LightGroup7"))
+		return SCE_PASS_LIGHT_GROUP_7;
+
+	if (STRPREFIX(str, "LightGroup8"))
+		return SCE_PASS_LIGHT_GROUP_8;
+
 	return 0;
 
 #undef RETURN_PASS
 }
 
 
-static void set_pass_name(char *passname, int passtype, int channel, const char *view)
+static void set_pass_name(char *passname, uint64_t passtype, int channel, const char *view)
 {
 	const char delims[] = {'.', '\0'};
 	const char *sep;
@@ -491,7 +668,7 @@ static void set_pass_name(char *passname, int passtype, int channel, const char 
 
 /********************************** New **************************************/
 
-static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int channels, int passtype, const char *viewname)
+static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int channels, uint64_t passtype, const char *viewname)
 {
 	const int view_id = BLI_findstringindex(&rr->views, viewname, offsetof(RenderView, name));
 	const char *typestr = name_from_passtype(passtype, -1);
@@ -574,7 +751,7 @@ static RenderPass *render_layer_add_debug_pass(RenderResult *rr,
 {
 	const char *name = RE_debug_pass_name_get(debug_type);
 	int channels = RE_debug_pass_num_channels_get(debug_type);
-	RenderPass *rpass = render_layer_add_pass(rr, rl, channels, pass_type, view);
+	RenderPass *rpass = render_layer_add_pass(rr, rl, channels, (unsigned int) pass_type, view);
 	if (rpass == NULL) {
 		return NULL;
 	}
@@ -683,7 +860,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 
 #define RENDER_LAYER_ADD_PASS_SAFE(rr, rl, channels, passtype, viewname) \
 			do { \
-				if (render_layer_add_pass(rr, rl, channels, passtype, viewname) == NULL) { \
+				if (render_layer_add_pass(rr, rl, channels, (unsigned int) (passtype), viewname) == NULL) { \
 					render_result_free(rr); \
 					return NULL; \
 				} \
@@ -809,6 +986,64 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	rr->yof = re->disprect.ymin + BLI_rcti_cent_y(&re->disprect) - (re->winy / 2);
 	
 	return rr;
+}
+
+void render_result_clone_passes(Render *re, RenderResult *rr, const char *viewname)
+{
+	RenderLayer *rl, *main_rl;
+	RenderPass *rp, *main_rp;
+	RenderView *rv;
+
+	for(rl = rr->layers.first; rl; rl = rl->next) {
+		/* Find corresponding layer in main result */
+		for(main_rl = re->result->layers.first; main_rl; main_rl = main_rl->next) {
+			if(strcmp(main_rl->name, rl->name) == 0)
+				break;
+		}
+
+		if(!main_rl)
+			continue;
+
+		for (rv = rr->views.first; rv; rv = rv->next) {
+			const char *view = rv->name;
+
+			if (viewname && viewname[0])
+				if (!STREQ(view, viewname))
+					continue;
+
+			/* Skip all common passes */
+			for(rp = rl->passes.first, main_rp = main_rl->passes.first; rp && main_rp; rp = rp->next)
+				main_rp = main_rp->next;
+			/* Add the missing passes */
+			for(; main_rp; main_rp = main_rp->next) {
+				render_layer_add_pass(rr, rl, main_rp->channels, main_rp->passtype, view);
+			}
+		}
+	}
+}
+
+
+/* allocate new pass in an existing render result */
+void render_result_add_pass(RenderResult *rr, uint64_t passtype, int channels, const char *layername, const char *viewname)
+{
+	RenderLayer *rl;
+	RenderView *rv;
+
+	for (rl = rr->layers.first; rl; rl = rl->next) {
+		if (layername && layername[0])
+			if (!STREQ(rl->name, layername))
+				continue;
+
+		for (rv = rr->views.first; rv; rv = rv->next) {
+			const char *view = rv->name;
+
+			if (viewname && viewname[0])
+				if (!STREQ(view, viewname))
+					continue;
+
+			render_layer_add_pass(rr, rl, channels, passtype, view);
+		}
+	}
 }
 
 /* allocate osa new results for samples */
