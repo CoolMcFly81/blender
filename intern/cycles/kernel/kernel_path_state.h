@@ -34,7 +34,6 @@ ccl_device_inline void path_state_init(KernelGlobals *kg,
 	state->glossy_bounce = 0;
 	state->transmission_bounce = 0;
 	state->transparent_bounce = 0;
-	state->path_length = 0.0f;
 
 	state->min_ray_pdf = FLT_MAX;
 	state->ray_pdf = 0.0f;
@@ -54,10 +53,6 @@ ccl_device_inline void path_state_init(KernelGlobals *kg,
 	else {
 		state->volume_stack[0].shader = SHADER_NONE;
 	}
-#endif
-
-#ifdef __SHADOW_TRICKS__
-	state->catcher_object = OBJECT_NONE;
 #endif
 }
 

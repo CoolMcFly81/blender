@@ -48,14 +48,13 @@ ccl_device_inline void kernel_path_volume_connect_light(
 
 	if(light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, state->bounce, &ls))
 	{
-		float terminate = path_state_rng_1D_for_decision(kg, rng, state, PRNG_LIGHT_TERMINATE);
-		if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
+		if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 			/* trace shadow ray */
 			float3 shadow;
 
 			if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 				/* accumulate */
-				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 			}
 		}
 	}
@@ -135,7 +134,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 			int num_samples = light_select_num_samples(kg, i);
 			float num_samples_inv = 1.0f/(num_samples*kernel_data.integrator.num_all_lights);
-			RNG lamp_rng = path_rng_hash(*rng, i);
+			RNG lamp_rng = cmj_hash(*rng, i);
 
 			for(int j = 0; j < num_samples; j++) {
 				/* sample random position on given light */
@@ -162,14 +161,13 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 					if(kernel_data.integrator.pdf_triangles != 0.0f)
 						ls.pdf *= 2.0f;
 
-					float terminate = path_branched_rng_1D_for_decision(kg, rng, state, j, num_samples, PRNG_LIGHT_TERMINATE);
-					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
+					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 						/* trace shadow ray */
 						float3 shadow;
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 						}
 					}
 				}
@@ -211,14 +209,13 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 					if(kernel_data.integrator.num_all_lights)
 						ls.pdf *= 2.0f;
 
-					float terminate = path_branched_rng_1D_for_decision(kg, rng, state, j, num_samples, PRNG_LIGHT_TERMINATE);
-					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
+					if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 						/* trace shadow ray */
 						float3 shadow;
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 						}
 					}
 				}
@@ -249,14 +246,13 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 		/* todo: split up light_sample so we don't have to call it again with new position */
 		if(light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, state->bounce, &ls)) {
 			/* sample random light */
-			float terminate = path_state_rng_1D_for_decision(kg, rng, state, PRNG_LIGHT_TERMINATE);
-			if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate)) {
+			if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 				/* trace shadow ray */
 				float3 shadow;
 
 				if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 					/* accumulate */
-					path_radiance_accum_light(L, tp, &L_light, shadow, 1.0f, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+					path_radiance_accum_light(L, tp, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 				}
 			}
 		}

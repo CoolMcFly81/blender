@@ -256,47 +256,6 @@ static void engine_update_script_node(RenderEngine *engine, struct bNodeTree *nt
 	RNA_parameter_list_free(&list);
 }
 
-static int engine_can_postprocess(RenderEngine *engine, struct RenderResult *result)
-{
-	extern FunctionRNA rna_RenderEngine_can_postprocess_func;
-	PointerRNA ptr;
-	ParameterList list;
-	FunctionRNA *func;
-	void *ret;
-	int can_postprocess;
-
-	RNA_pointer_create(NULL, engine->type->ext.srna, engine, &ptr);
-	func = &rna_RenderEngine_can_postprocess_func;
-
-	RNA_parameter_list_create(&list, &ptr, func);
-	RNA_parameter_set_lookup(&list, "result", &result);
-	engine->type->ext.call(NULL, &ptr, func, &list);
-	RNA_parameter_get_lookup(&list, "can_postprocess", &ret);
-	can_postprocess = *(int *)ret;
-
-	RNA_parameter_list_free(&list);
-
-	return can_postprocess;
-}
-
-static void engine_postprocess(RenderEngine *engine, struct Scene *scene, struct RenderResult *result)
-{
-	extern FunctionRNA rna_RenderEngine_postprocess_func;
-	PointerRNA ptr;
-	ParameterList list;
-	FunctionRNA *func;
-
-	RNA_pointer_create(NULL, engine->type->ext.srna, engine, &ptr);
-	func = &rna_RenderEngine_postprocess_func;
-
-	RNA_parameter_list_create(&list, &ptr, func);
-	RNA_parameter_set_lookup(&list, "scene", &scene);
-	RNA_parameter_set_lookup(&list, "result", &result);
-	engine->type->ext.call(NULL, &ptr, func, &list);
-
-	RNA_parameter_list_free(&list);
-}
-
 /* RenderEngine registration */
 
 static void rna_RenderEngine_unregister(Main *UNUSED(bmain), StructRNA *type)
@@ -317,7 +276,7 @@ static StructRNA *rna_RenderEngine_register(Main *bmain, ReportList *reports, vo
 	RenderEngineType *et, dummyet = {NULL};
 	RenderEngine dummyengine = {NULL};
 	PointerRNA dummyptr;
-	int have_function[8];
+	int have_function[6];
 
 	/* setup dummy engine & engine type to store static properties in */
 	dummyengine.type = &dummyet;
@@ -359,8 +318,6 @@ static StructRNA *rna_RenderEngine_register(Main *bmain, ReportList *reports, vo
 	et->view_update = (have_function[3]) ? engine_view_update : NULL;
 	et->view_draw = (have_function[4]) ? engine_view_draw : NULL;
 	et->update_script_node = (have_function[5]) ? engine_update_script_node : NULL;
-	et->can_postprocess = (have_function[6]) ? engine_can_postprocess : NULL;
-	et->postprocess = (have_function[7]) ? engine_postprocess : NULL;
 
 	BLI_addtail(&R_engines, et);
 
@@ -446,12 +403,6 @@ void rna_RenderPass_rect_set(PointerRNA *ptr, const float *values)
 	memcpy(rpass->rect, values, sizeof(float) * rpass->rectx * rpass->recty * rpass->channels);
 }
 
-static int rna_RenderPass_extended_type_get(PointerRNA *ptr)
-{
-	RenderPass *rpass = (RenderPass *)ptr->data;
-	return rpass->passtype >> 32;
-}
-
 static PointerRNA rna_BakePixel_next_get(PointerRNA *ptr)
 {
 	BakePixel *bp = ptr->data;
@@ -531,23 +482,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_pointer(func, "node", "Node", "", "");
 	RNA_def_property_flag(prop, PROP_RNAPTR);
 
-	/* result postprocessing callbacks */
-	func = RNA_def_function(srna, "can_postprocess", NULL);
-	RNA_def_function_ui_description(func, "Pool whether a render result can be postprocessed");
-	RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
-	prop = RNA_def_pointer(func, "result", "RenderResult", "Result", "");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_boolean(func, "can_postprocess", 0, "Can post-process", "Whether the render result can be postprocessed or not");
-	RNA_def_function_return(func, prop);
-
-	func = RNA_def_function(srna, "postprocess", NULL);
-	RNA_def_function_ui_description(func, "Postprocess the given render result");
-	RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
-	prop = RNA_def_pointer(func, "scene", "Scene", "Scene", "");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_pointer(func, "result", "RenderResult", "Result", "");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-
 	/* tag for redraw */
 	func = RNA_def_function(srna, "tag_redraw", "engine_tag_redraw");
 	RNA_def_function_ui_description(func, "Request redraw for viewport rendering");
@@ -580,18 +514,8 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "All pixels in the render result have been set and are final");
 	prop = RNA_def_pointer(func, "result", "RenderResult", "Result", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	RNA_def_boolean(func, "cancel", 0, "Cancel", "Don't merge results unless forced");
-	RNA_def_boolean(func, "highlight", 0, "Highlight", "Don't mark tile as done yet");
+	RNA_def_boolean(func, "cancel", 0, "Cancel", "Don't mark tile as done, don't merge results unless forced");
 	RNA_def_boolean(func, "do_merge_results", 0, "Merge Results", "Merge results even if cancel=true");
-
-	func = RNA_def_function(srna, "add_pass", "RE_engine_add_pass");
-	RNA_def_function_ui_description(func, "Add a pass to the render layer");
-	prop = RNA_def_int(func, "type", 0, 0, INT_MAX, "Pass Type", "", 0, INT_MAX);
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_int(func, "channels", 0, 0, INT_MAX, "Channels", "", 0, INT_MAX);
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	RNA_def_string(func, "layer", NULL, 0, "Layer", "Single layer to add render pass to");  /* NULL ok here */
-	RNA_def_string(func, "view", NULL, 0, "View", "Single view to add render pass to");  /* NULL ok here */
 
 	func = RNA_def_function(srna, "test_break", "RE_engine_test_break");
 	RNA_def_function_ui_description(func, "Test if the render operation should been canceled, this is a fast call that should be used regularly for responsiveness");
@@ -759,10 +683,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_SPHERICAL_STEREO);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 
-	prop = RNA_def_property(srna, "bl_use_result_postprocess", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_RESULT_POSTPROCESS);
-	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
-
 	RNA_define_verify_sdna(1);
 }
 
@@ -909,10 +829,6 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "passtype");
 	RNA_def_property_enum_items(prop, rna_enum_render_pass_type_items);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
-	prop = RNA_def_property(srna, "extended_type", PROP_INT, PROP_NONE);
-	RNA_def_property_int_funcs(prop, "rna_RenderPass_extended_type_get", NULL, NULL);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "rect", PROP_FLOAT, PROP_NONE);

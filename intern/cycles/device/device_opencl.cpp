@@ -1642,11 +1642,6 @@ public:
 	cl_kernel ckPathTraceKernel;
 	cl_program path_trace_program;
 
-	virtual bool show_samples() const
-	{
-		return true;
-	}
-
 	OpenCLDeviceMegaKernel(DeviceInfo& info, Stats &stats, bool background_)
 	: OpenCLDeviceBase(info, stats, background_)
 	{
@@ -1797,11 +1792,10 @@ public:
 		else if(task->type == DeviceTask::SHADER) {
 			shader(*task);
 		}
-		else if(task->type == DeviceTask::RENDER) {
+		else if(task->type == DeviceTask::PATH_TRACE) {
 			RenderTile tile;
 			/* Keep rendering tiles until done. */
 			while(task->acquire_tile(this, tile)) {
-				assert(tile.task == RenderTile::PATH_TRACE);
 				int start_sample = tile.start_sample;
 				int end_sample = tile.start_sample + tile.num_samples;
 
@@ -1944,7 +1938,6 @@ public:
 	/* Global memory required for shadow blocked and accum_radiance. */
 	cl_mem BSDFEval_coop;
 	cl_mem ISLamp_coop;
-	cl_mem light_groups_coop;
 	cl_mem LightRay_coop;
 	cl_mem AOAlpha_coop;
 	cl_mem AOBSDF_coop;
@@ -2002,11 +1995,6 @@ public:
 	/* Marked True in constructor and marked false at the end of path_trace(). */
 	bool first_tile;
 
-	virtual bool show_samples() const
-	{
-		return false;
-	}
-
 	OpenCLDeviceSplitKernel(DeviceInfo& info, Stats &stats, bool background_)
 	: OpenCLDeviceBase(info, stats, background_)
 	{
@@ -2057,7 +2045,6 @@ public:
 		AOLightRay_coop = NULL;
 		BSDFEval_coop = NULL;
 		ISLamp_coop = NULL;
-		light_groups_coop = NULL;
 		LightRay_coop = NULL;
 		Intersection_coop_shadow = NULL;
 
@@ -2327,7 +2314,6 @@ public:
 		release_mem_object_safe(AOLightRay_coop);
 		release_mem_object_safe(BSDFEval_coop);
 		release_mem_object_safe(ISLamp_coop);
-		release_mem_object_safe(light_groups_coop);
 		release_mem_object_safe(LightRay_coop);
 		release_mem_object_safe(Intersection_coop_shadow);
 #ifdef WITH_CYCLES_DEBUG
@@ -2467,7 +2453,6 @@ public:
 			AOLightRay_coop = mem_alloc(num_global_elements * sizeof(Ray));
 			BSDFEval_coop = mem_alloc(num_global_elements * sizeof(BsdfEval));
 			ISLamp_coop = mem_alloc(num_global_elements * sizeof(int));
-			light_groups_coop = mem_alloc(num_global_elements * sizeof(int));
 			LightRay_coop = mem_alloc(num_global_elements * sizeof(Ray));
 			Intersection_coop_shadow = mem_alloc(2 * num_global_elements * sizeof(Intersection));
 
@@ -2671,7 +2656,6 @@ public:
 		                rng_coop,
 		                PathState_coop,
 		                ISLamp_coop,
-		                light_groups_coop,
 		                LightRay_coop,
 		                BSDFEval_coop,
 		                ray_state,
@@ -2703,7 +2687,6 @@ public:
 		                PathState_coop,
 		                LightRay_coop,
 		                ISLamp_coop,
-		                light_groups_coop,
 		                BSDFEval_coop,
 		                AOLightRay_coop,
 		                AOBSDF_coop,
@@ -2954,7 +2937,6 @@ public:
 			+ sizeof(char)            /* Ray state size */
 			+ sizeof(unsigned int)    /* Work element size */
 			+ sizeof(int)             /* ISLamp_size */
-			+ sizeof(int)             /* light_groups_size */
 			+ sizeof(PathRadiance) + sizeof(Ray) + sizeof(PathState)
 			+ sizeof(Intersection)    /* Overall isect */
 			+ sizeof(Intersection)    /* Instersection_coop_AO */
@@ -3142,7 +3124,7 @@ public:
 		else if(task->type == DeviceTask::SHADER) {
 			shader(*task);
 		}
-		else if(task->type == DeviceTask::RENDER) {
+		else if(task->type == DeviceTask::PATH_TRACE) {
 			RenderTile tile;
 			bool initialize_data_and_check_render_feasibility = false;
 			bool need_to_split_tiles_further = false;
@@ -3151,7 +3133,6 @@ public:
 			const int2 tile_size = task->requested_tile_size;
 			/* Keep rendering tiles until done. */
 			while(task->acquire_tile(this, tile)) {
-				assert(tile.task == RenderTile::PATH_TRACE);
 				if(!initialize_data_and_check_render_feasibility) {
 					/* Initialize data. */
 					/* Calculate per_thread_output_buffer_size. */
