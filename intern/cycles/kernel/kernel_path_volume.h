@@ -55,7 +55,7 @@ ccl_device_inline void kernel_path_volume_connect_light(
 
 			if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 				/* accumulate */
-				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 			}
 		}
 	}
@@ -135,7 +135,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 			int num_samples = light_select_num_samples(kg, i);
 			float num_samples_inv = 1.0f/(num_samples*kernel_data.integrator.num_all_lights);
-			RNG lamp_rng = path_rng_hash(*rng, i);
+			RNG lamp_rng = cmj_hash(*rng, i);
 
 			for(int j = 0; j < num_samples; j++) {
 				/* sample random position on given light */
@@ -169,7 +169,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 						}
 					}
 				}
@@ -218,7 +218,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+							path_radiance_accum_light(L, tp*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 						}
 					}
 				}
@@ -256,7 +256,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 				if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 					/* accumulate */
-					path_radiance_accum_light(L, tp, &L_light, shadow, 1.0f, state->bounce, is_lamp, lamp_light_groups(kg, &ls));
+					path_radiance_accum_light(L, tp, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 				}
 			}
 		}

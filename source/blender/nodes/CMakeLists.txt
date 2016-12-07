@@ -163,7 +163,6 @@ set(SRC
 	shader/nodes/node_shader_background.c
 	shader/nodes/node_shader_bsdf_anisotropic.c
 	shader/nodes/node_shader_bsdf_diffuse.c
-	shader/nodes/node_shader_bsdf_disney.c
 	shader/nodes/node_shader_bsdf_glass.c
 	shader/nodes/node_shader_bsdf_glossy.c
 	shader/nodes/node_shader_bsdf_toon.c
@@ -177,7 +176,6 @@ set(SRC
 	shader/nodes/node_shader_fresnel.c
 	shader/nodes/node_shader_geometry.c
 	shader/nodes/node_shader_holdout.c
-	shader/nodes/node_shader_ies_light.c
 	shader/nodes/node_shader_layer_weight.c
 	shader/nodes/node_shader_light_falloff.c
 	shader/nodes/node_shader_light_path.c

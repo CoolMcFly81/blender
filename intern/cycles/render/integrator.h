@@ -79,16 +79,8 @@ public:
 	Method method;
 
 	SamplingPattern sampling_pattern;
-	bool use_dithered_sampling;
-	float scrambling_distance;
 
 	bool need_update;
-
-	int half_window;
-	float filter_strength;
-	float weighting_adjust;
-	bool use_nlm_weights;
-	bool use_gradients;
 
 	Integrator();
 	~Integrator();

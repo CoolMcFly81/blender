@@ -83,8 +83,7 @@ typedef struct RenderView {
 
 typedef struct RenderPass {
 	struct RenderPass *next, *prev;
-	uint64_t passtype;
-	int channels;
+	int passtype, channels;
 	char name[64];		/* amount defined in openexr_multi.h */
 	char chan_id[8];	/* amount defined in openexr_multi.h */
 	float *rect;
@@ -112,8 +111,7 @@ typedef struct RenderLayer {
 	/* copy of RenderData */
 	char name[RE_MAXNAME];
 	unsigned int lay, lay_zmask, lay_exclude;
-	int layflag, pass_xor;
-	uint64_t passflag;
+	int layflag, passflag, pass_xor;
 	
 	struct Material *mat_override;
 	struct Group *light_override;
@@ -237,14 +235,14 @@ void RE_render_result_rect_from_ibuf(
         struct ImBuf *ibuf, const int view_id);
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
-float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, uint64_t passtype, const char *viewname);
+float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname);
 
 /* add passes for grease pencil */
 struct RenderPass *RE_create_gp_pass(struct RenderResult *rr, const char *layername, const char *viewname);
 
 /* obligatory initialize call, disprect is optional */
 void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd,
-                  struct SceneRenderLayer *srl, struct RenderResult *rr,
+                  struct SceneRenderLayer *srl,
                   int winx, int winy, rcti *disprect);
 void RE_ChangeResolution(struct Render *re, int winx, int winy, rcti *disprect);
 void RE_ChangeModeFlag(struct Render *re, int flag, bool clear);
@@ -346,7 +344,7 @@ int RE_seq_render_active(struct Scene *scene, struct RenderData *rd);
 
 bool RE_layers_have_name(struct RenderResult *result);
 
-struct RenderPass *RE_pass_find_by_type(volatile struct RenderLayer *rl, uint64_t passtype, const char *viewname);
+struct RenderPass *RE_pass_find_by_type(volatile struct RenderLayer *rl, int passtype, const char *viewname);
 
 /* shaded view or baking options */
 #define RE_BAKE_LIGHT				0	/* not listed in rna_scene.c -> can't be enabled! */

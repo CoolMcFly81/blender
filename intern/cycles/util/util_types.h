@@ -295,13 +295,6 @@ public:
 
 #endif
 
-ccl_device_inline int align_up(int offset, int alignment)
-{
-	return (offset + alignment - 1) & ~(alignment - 1);
-}
-
-#define ALIGN_UP(offset, alignment) ((offset + alignment - 1) & ~(alignment - 1))
-
 #ifndef __KERNEL_GPU__
 
 /* Vector Type Constructors
@@ -402,6 +395,11 @@ ccl_device_inline float4 make_float4(float x, float y, float z, float w)
 #endif
 
 	return a;
+}
+
+ccl_device_inline int align_up(int offset, int alignment)
+{
+	return (offset + alignment - 1) & ~(alignment - 1);
 }
 
 ccl_device_inline int3 make_int3(int i)

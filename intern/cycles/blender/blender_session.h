@@ -46,10 +46,6 @@ public:
 	               BL::RegionView3D& b_rv3d,
 	               int width, int height);
 
-	BlenderSession(BL::RenderEngine& b_engine,
-	               BL::UserPreferences& b_userpref,
-	               BL::Scene& b_scene);
-
 	~BlenderSession();
 
 	void create();
@@ -60,9 +56,6 @@ public:
 
 	void reset_session(BL::BlendData& b_data,
 	                   BL::Scene& b_scene);
-
-	/* denoising */
-	void denoise(BL::RenderResult& b_rr);
 
 	/* offline render */
 	void render();
@@ -86,7 +79,7 @@ public:
 	void update_render_result(BL::RenderResult& b_rr,
 	                          BL::RenderLayer& b_rlay,
 	                          RenderTile& rtile);
-	void update_render_tile(RenderTile& rtile, bool highlight);
+	void update_render_tile(RenderTile& rtile);
 
 	/* interactive updates */
 	void synchronize();
@@ -149,7 +142,7 @@ protected:
 	                                   BL::RenderLayer& b_rlay,
 	                                   RenderTile& rtile,
 	                                   bool do_update_only);
-	void do_write_update_render_tile(RenderTile& rtile, bool do_update_only, bool highlight);
+	void do_write_update_render_tile(RenderTile& rtile, bool do_update_only);
 
 	int builtin_image_frame(const string &builtin_name);
 	void builtin_image_info(const string &builtin_name,
@@ -171,8 +164,6 @@ protected:
 	/* Update tile manager to reflect resumable render settings. */
 	void update_resumable_tile_manager(int num_samples);
 };
-
-bool can_denoise_render_result(BL::RenderResult& b_rr);
 
 CCL_NAMESPACE_END
 

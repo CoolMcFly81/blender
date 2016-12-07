@@ -104,7 +104,6 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
-    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
     )
 
@@ -264,14 +263,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 description="Random sampling pattern used by the integrator",
                 items=enum_sampling_pattern,
                 default='SOBOL',
-                )
-
-        cls.scrambling_distance = FloatProperty(
-                name="Scrambling distance",
-                description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
-                            "lower values might speed up rendering but can cause visible artifacts",
-                min=0.0, max=1.0,
-                default=1.0,
                 )
 
         cls.use_layer_samples = EnumProperty(
@@ -1079,12 +1070,6 @@ class CyclesObjectSettings(bpy.types.PropertyGroup):
                 description="Multiplier for scene dicing rate (located in the Geometry Panel)",
                 min=0.1, max=1000.0, soft_min=0.5,
                 default=1.0,
-                )
-
-        cls.is_shadow_catcher = BoolProperty(
-                name="Shadow Catcher",
-                description="This object is only catching shadows",
-                default=False,
                 )
 
     @classmethod

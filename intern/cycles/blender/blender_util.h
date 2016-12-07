@@ -39,31 +39,6 @@ float *BKE_image_get_float_pixels_for_frame(void *image, int frame);
 
 CCL_NAMESPACE_BEGIN
 
-/* TODO Wrap through RNA */
-typedef enum BlenderDenoisePasses {
-	SCE_PASS_DENOISE_NORMAL           = 32,
-	SCE_PASS_DENOISE_NORMAL_VAR       = 33,
-	SCE_PASS_DENOISE_ALBEDO           = 34,
-	SCE_PASS_DENOISE_ALBEDO_VAR       = 35,
-	SCE_PASS_DENOISE_DEPTH            = 36,
-	SCE_PASS_DENOISE_DEPTH_VAR        = 37,
-	SCE_PASS_DENOISE_SHADOW_A         = 38,
-	SCE_PASS_DENOISE_SHADOW_B         = 39,
-	SCE_PASS_DENOISE_NOISY            = 40, /* The original noisy image (only the components that are denoised). */
-	SCE_PASS_DENOISE_NOISY_VAR        = 41,
-	SCE_PASS_DENOISE_CLEAN            = 42, /* If present, these image components are added to the denoised image. */
-	SCE_PASS_DENOISE_NOISY_B          = 43,
-	SCE_PASS_DENOISE_NOISY_B_VAR      = 44,
-	SCE_PASS_LIGHT_GROUP_1            = 45,
-	SCE_PASS_LIGHT_GROUP_2            = 46,
-	SCE_PASS_LIGHT_GROUP_3            = 47,
-	SCE_PASS_LIGHT_GROUP_4            = 48,
-	SCE_PASS_LIGHT_GROUP_5            = 49,
-	SCE_PASS_LIGHT_GROUP_6            = 50,
-	SCE_PASS_LIGHT_GROUP_7            = 51,
-	SCE_PASS_LIGHT_GROUP_8            = 52,
-} BlenderDenoisePasses;
-
 void python_thread_state_save(void **python_thread_state);
 void python_thread_state_restore(void **python_thread_state);
 
@@ -487,19 +462,6 @@ static inline string blender_absolute_path(BL::BlendData& b_data,
 	}
 
 	return path;
-}
-
-static inline string get_text_content(PointerRNA ptr)
-{
-	if(ptr.data == NULL)
-		return "";
-
-	string content;
-	BL::Text::lines_iterator iter;
-	iter.begin(ptr);
-	for(iter.begin(ptr); iter; ++iter)
-		content += iter->body() + "\n";
-	return content;
 }
 
 /* Texture Space */
