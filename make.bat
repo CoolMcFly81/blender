@@ -4,6 +4,11 @@ REM This is for users who like to configure & build Blender with a single comman
 
 setlocal ENABLEEXTENSIONS
 set BLENDER_DIR=%~dp0
+set BLENDER_DIR_NOSPACES=%BLENDER_DIR: =%
+if not "%BLENDER_DIR%"=="%BLENDER_DIR_NOSPACES%" ( 
+	echo There are spaces detected in the build path "%BLENDER_DIR%", this is currently not supported, exiting.... 
+	goto EOF
+)
 set BUILD_DIR=%BLENDER_DIR%..\build_windows
 set BUILD_TYPE=Release
 rem reset all variables so they do not get accidentally get carried over from previous builds
@@ -56,6 +61,9 @@ if NOT "%1" == "" (
 		set BUILD_ARCH=x86
 	)	else if "%1" == "x64" (
 		set BUILD_ARCH=x64
+	)	else if "%1" == "2017" (
+	set BUILD_VS_VER=15
+	set BUILD_VS_YEAR=2017
 	)	else if "%1" == "2015" (
 	set BUILD_VS_VER=14
 	set BUILD_VS_YEAR=2015
@@ -126,28 +134,16 @@ set BUILD_DIR=%BUILD_DIR%_%TARGET%_%BUILD_ARCH%_vc%BUILD_VS_VER%_%BUILD_TYPE%
 
 if "%target%"=="Release" (
 		rem for vc12 check for both cuda 7.5 and 8 
-		if "%BUILD_VS_VER%"=="12" (
-			if "%CUDA_PATH_V7_5%"=="" (
-				echo Cuda 7.5 Not found, aborting!
-				goto EOF
-			)
-		)
-		if "%CUDA_PATH_V8_0%"=="" (
-			echo Cuda 8.0 Not found, aborting!
+		if "%CUDA_PATH%"=="" (
+			echo Cuda Not found, aborting!
 			goto EOF
 		)
-		if "%BUILD_VS_VER%"=="12" (
-					set BUILD_CMAKE_ARGS=%BUILD_CMAKE_ARGS% ^
-					-C"%BLENDER_DIR%\build_files\cmake\config\blender_release.cmake" -DCUDA_NVCC_EXECUTABLE:FILEPATH=%CUDA_PATH_V7_5%/bin/nvcc.exe -DCUDA_NVCC8_EXECUTABLE:FILEPATH=%CUDA_PATH_V8_0%/bin/nvcc.exe  
-		)		
-		if "%BUILD_VS_VER%"=="14" (
-					set BUILD_CMAKE_ARGS=%BUILD_CMAKE_ARGS% ^
-					-C"%BLENDER_DIR%\build_files\cmake\config\blender_release.cmake" -DCUDA_NVCC_EXECUTABLE:FILEPATH=%CUDA_PATH_V8_0%/bin/nvcc.exe -DCUDA_NVCC8_EXECUTABLE:FILEPATH=%CUDA_PATH_V8_0%/bin/nvcc.exe  
-		)
+		set BUILD_CMAKE_ARGS=%BUILD_CMAKE_ARGS% ^
+		-C"%BLENDER_DIR%\build_files\cmake\config\blender_release.cmake" 
 )
 
 :DetectMSVC
-REM Detect MSVC Installation
+REM Detect MSVC Installation for 2013-2015
 if DEFINED VisualStudioVersion goto msvc_detect_finally
 set VALUE_NAME=ProductDir
 REM Check 64 bits
@@ -160,7 +156,18 @@ for /F "usebackq skip=2 tokens=1-2*" %%A IN (`REG QUERY %KEY_NAME% /v %VALUE_NAM
 if DEFINED MSVC_VC_DIR goto msvc_detect_finally
 :msvc_detect_finally
 if DEFINED MSVC_VC_DIR call "%MSVC_VC_DIR%\vcvarsall.bat"
+if DEFINED MSVC_VC_DIR goto sanity_checks
 
+rem MSVC Build environment 2017 and up. 
+for /F "usebackq skip=2 tokens=1-2*" %%A IN (`REG QUERY "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\SXS\VS7" /v %BUILD_VS_VER%.0 2^>nul`) DO set MSVC_VS_DIR=%%C
+if DEFINED MSVC_VS_DIR goto msvc_detect_finally_2017
+REM Check 32 bits
+for /F "usebackq skip=2 tokens=1-2*" %%A IN (`REG QUERY "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\sxs\vs7" /v %BUILD_VS_VER%.0 2^>nul`) DO set MSVC_VS_DIR=%%C
+if DEFINED MSVC_VS_DIR goto msvc_detect_finally_2017
+:msvc_detect_finally_2017
+if DEFINED MSVC_VS_DIR call "%MSVC_VS_DIR%\Common7\Tools\VsDevCmd.bat"
+
+:sanity_checks
 REM Sanity Checks
 where /Q msbuild
 if %ERRORLEVEL% NEQ 0 (
@@ -237,7 +244,8 @@ msbuild ^
 	/property:Configuration=%BUILD_TYPE% ^
 	/maxcpucount ^
 	/verbosity:minimal ^
-	/p:platform=%MSBUILD_PLATFORM%
+	/p:platform=%MSBUILD_PLATFORM% ^
+	/flp:Summary;Verbosity=minimal;LogFile=%BUILD_DIR%\Build.log
 
 if %ERRORLEVEL% NEQ 0 (
 	echo "Build Failed"

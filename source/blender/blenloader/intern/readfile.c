@@ -2147,6 +2147,7 @@ static PreviewImage *direct_link_preview_image(FileData *fd, PreviewImage *old_p
 			prv->gputexture[i] = NULL;
 		}
 		prv->icon_id = 0;
+		prv->tag = 0;
 	}
 	
 	return prv;
@@ -4277,12 +4278,15 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 			
 			psys->flag &= ~PSYS_KEYED;
 		}
-		
+
 		if (psys->particles && psys->particles->boid) {
 			pa = psys->particles;
 			pa->boid = newdataadr(fd, pa->boid);
-			for (a=1, pa++; a<psys->totpart; a++, pa++)
-				pa->boid = (pa-1)->boid + 1;
+			pa->boid->ground = NULL;  /* This is purely runtime data, but still can be an issue if left dangling. */
+			for (a = 1, pa++; a < psys->totpart; a++, pa++) {
+				pa->boid = (pa - 1)->boid + 1;
+				pa->boid->ground = NULL;
+			}
 		}
 		else if (psys->particles) {
 			for (a=0, pa=psys->particles; a<psys->totpart; a++, pa++)
@@ -5087,6 +5091,7 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 				smd->domain->tex = NULL;
 				smd->domain->tex_shadow = NULL;
 				smd->domain->tex_wt = NULL;
+				smd->domain->coba = newdataadr(fd, smd->domain->coba);
 				
 				smd->domain->effector_weights = newdataadr(fd, smd->domain->effector_weights);
 				if (!smd->domain->effector_weights)
@@ -5192,6 +5197,7 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			collmd->time_x = collmd->time_xnew = -1000;
 			collmd->mvert_num = 0;
 			collmd->tri_num = 0;
+			collmd->is_static = false;
 			collmd->bvhtree = NULL;
 			collmd->tri = NULL;
 			
@@ -8096,6 +8102,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 	id->lib = main->curlib;
 	id->us = ID_FAKE_USERS(id);
 	id->icon_id = 0;
+	id->newid = NULL;  /* Needed because .blend may have been saved with crap value here... */
 	
 	/* this case cannot be direct_linked: it's just the ID part */
 	if (bhead->code == ID_ID) {
