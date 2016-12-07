@@ -3492,7 +3492,8 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 		Scene *scene;
 		/* another scene can be rendering too, for example via compositor */
 		for (scene = CTX_data_main(C)->scene.first; scene; scene = scene->id.next) {
-			if (WM_jobs_test(wm, scene, WM_JOB_TYPE_RENDER)) {
+			if (WM_jobs_test(wm, scene, WM_JOB_TYPE_RENDER) ||
+			    WM_jobs_test(wm, scene, WM_JOB_TYPE_POSTPROCESS)) {
 				handle_event = B_STOPRENDER;
 				icon = ICON_SCENE;
 				break;
@@ -3781,6 +3782,7 @@ void uiTemplateColormanagedViewSettings(uiLayout *layout, bContext *UNUSED(C), P
 	col = uiLayoutColumn(layout, false);
 	uiItemR(col, &view_transform_ptr, "exposure", 0, NULL, ICON_NONE);
 	uiItemR(col, &view_transform_ptr, "gamma", 0, NULL, ICON_NONE);
+	uiItemR(col, &view_transform_ptr, "white_value", 0, NULL, ICON_NONE);
 
 	uiItemR(col, &view_transform_ptr, "look", 0, IFACE_("Look"), ICON_NONE);
 

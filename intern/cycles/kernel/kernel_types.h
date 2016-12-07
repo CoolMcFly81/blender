@@ -35,7 +35,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* constants */
-#define OBJECT_SIZE 		12
+#define OBJECT_SIZE 		13
 #define OBJECT_VECTOR_SIZE	6
 #define LIGHT_SIZE		11
 #define FILTER_TABLE_SIZE	1024
@@ -140,6 +140,11 @@ CCL_NAMESPACE_BEGIN
 #define __INTERSECTION_REFINE__
 #define __CLAMP_SAMPLE__
 #define __PATCH_EVAL__
+
+#ifndef __SPLIT_KERNEL__
+#  define __SHADOW_TRICKS__
+#  define __SHADOW_CATCHER_BACKGROUND__
+#endif
 
 #ifdef __KERNEL_SHADING__
 #  define __SVM__
@@ -273,29 +278,31 @@ enum SamplingPattern {
 /* these flags values correspond to raytypes in osl.cpp, so keep them in sync! */
 
 enum PathRayFlag {
-	PATH_RAY_CAMERA = 1,
-	PATH_RAY_REFLECT = 2,
-	PATH_RAY_TRANSMIT = 4,
-	PATH_RAY_DIFFUSE = 8,
-	PATH_RAY_GLOSSY = 16,
-	PATH_RAY_SINGULAR = 32,
-	PATH_RAY_TRANSPARENT = 64,
+	PATH_RAY_CAMERA              = (1 << 0),
+	PATH_RAY_REFLECT             = (1 << 1),
+	PATH_RAY_TRANSMIT            = (1 << 2),
+	PATH_RAY_DIFFUSE             = (1 << 3),
+	PATH_RAY_GLOSSY              = (1 << 4),
+	PATH_RAY_SINGULAR            = (1 << 5),
+	PATH_RAY_TRANSPARENT         = (1 << 6),
 
-	PATH_RAY_SHADOW_OPAQUE = 128,
-	PATH_RAY_SHADOW_TRANSPARENT = 256,
+	PATH_RAY_SHADOW_OPAQUE       = (1 << 7),
+	PATH_RAY_SHADOW_TRANSPARENT  = (1 << 8),
 	PATH_RAY_SHADOW = (PATH_RAY_SHADOW_OPAQUE|PATH_RAY_SHADOW_TRANSPARENT),
 
-	PATH_RAY_CURVE = 512, /* visibility flag to define curve segments */
-	PATH_RAY_VOLUME_SCATTER = 1024, /* volume scattering */
+	PATH_RAY_CURVE               = (1 << 9), /* visibility flag to define curve segments */
+	PATH_RAY_VOLUME_SCATTER      = (1 << 10), /* volume scattering */
 
 	/* Special flag to tag unaligned BVH nodes. */
-	PATH_RAY_NODE_UNALIGNED = 2048,
+	PATH_RAY_NODE_UNALIGNED = (1 << 11),
 
-	PATH_RAY_ALL_VISIBILITY = (1|2|4|8|16|32|64|128|256|512|1024|2048),
+	PATH_RAY_ALL_VISIBILITY = ((1 << 12)-1),
 
-	PATH_RAY_MIS_SKIP = 4096,
-	PATH_RAY_DIFFUSE_ANCESTOR = 8192,
-	PATH_RAY_SINGLE_PASS_DONE = 16384,
+	PATH_RAY_MIS_SKIP            = (1 << 12),
+	PATH_RAY_DIFFUSE_ANCESTOR    = (1 << 13),
+	PATH_RAY_SINGLE_PASS_DONE    = (1 << 14),
+	PATH_RAY_DENOISING_PASS_DONE = (1 << 15),
+	PATH_RAY_SHADOW_CATCHER      = (1 << 16),
 };
 
 /* Closure Label */
@@ -383,9 +390,31 @@ typedef enum BakePassFilterCombos {
 	BAKE_FILTER_SUBSURFACE_INDIRECT = (BAKE_FILTER_INDIRECT | BAKE_FILTER_SUBSURFACE),
 } BakePassFilterCombos;
 
+typedef enum DenoiseFlag {
+	DENOISE_DIFFUSE_DIR      = (1 << 0),
+	DENOISE_DIFFUSE_IND      = (1 << 1),
+	DENOISE_GLOSSY_DIR       = (1 << 2),
+	DENOISE_GLOSSY_IND       = (1 << 3),
+	DENOISE_TRANSMISSION_DIR = (1 << 4),
+	DENOISE_TRANSMISSION_IND = (1 << 5),
+	DENOISE_SUBSURFACE_DIR   = (1 << 6),
+	DENOISE_SUBSURFACE_IND   = (1 << 7),
+
+	DENOISE_ALL = (
+	    DENOISE_DIFFUSE_DIR |
+	    DENOISE_DIFFUSE_IND |
+	    DENOISE_GLOSSY_DIR |
+	    DENOISE_GLOSSY_IND |
+	    DENOISE_TRANSMISSION_DIR |
+	    DENOISE_TRANSMISSION_IND |
+	    DENOISE_SUBSURFACE_DIR |
+	    DENOISE_SUBSURFACE_IND),
+} DenoiseFlag;
+
 typedef ccl_addr_space struct PathRadiance {
 #ifdef __PASSES__
 	int use_light_pass;
+	int use_light_groups;
 #endif
 
 	float3 emission;
@@ -421,8 +450,22 @@ typedef ccl_addr_space struct PathRadiance {
 	float3 path_subsurface;
 	float3 path_scatter;
 
+	float3 light_groups[8];
+
 	float4 shadow;
 	float mist;
+	float transparent;
+#endif
+
+#ifdef __SHADOW_TRICKS__
+	/* Total light reachable across the path, ignoring shadow blocked queries. */
+	float3 path_total;
+	/* Total light reachable across the path with shadow blocked queries
+	 * applied here.
+	 *
+	 * Dividing this figure by path_total will give estimate of shadow pass.
+	 */
+	float3 path_total_shaded;
 #endif
 } PathRadiance;
 
@@ -438,6 +481,9 @@ typedef struct BsdfEval {
 	float3 transparent;
 	float3 subsurface;
 	float3 scatter;
+#endif
+#ifdef __SHADOW_TRICKS__
+	float3 sum_no_mis;
 #endif
 } BsdfEval;
 
@@ -660,12 +706,13 @@ typedef struct AttributeDescriptor {
 #define SHADER_CLOSURE_BASE \
 	float3 weight; \
 	ClosureType type; \
-	float sample_weight \
+	float sample_weight; \
+	float3 N
 
 typedef ccl_addr_space struct ccl_align(16) ShaderClosure {
 	SHADER_CLOSURE_BASE;
 
-	float data[14]; /* pad to 80 bytes */
+	float data[10]; /* pad to 80 bytes */
 } ShaderClosure;
 
 /* Shader Context
@@ -732,10 +779,11 @@ enum ShaderDataFlag {
 	SD_OBJECT_HAS_VOLUME        = (1 << 28),  /* object has a volume shader */
 	SD_OBJECT_INTERSECTS_VOLUME = (1 << 29),  /* object intersects AABB of an object with volume shader */
 	SD_OBJECT_HAS_VERTEX_MOTION = (1 << 30),  /* has position for motion vertices */
+	SD_OBJECT_SHADOW_CATCHER    = (1 << 31),  /* object is used to catch shadows */
 
 	SD_OBJECT_FLAGS = (SD_HOLDOUT_MASK|SD_OBJECT_MOTION|SD_TRANSFORM_APPLIED|
 	                   SD_NEGATIVE_SCALE_APPLIED|SD_OBJECT_HAS_VOLUME|
-	                   SD_OBJECT_INTERSECTS_VOLUME)
+	                   SD_OBJECT_INTERSECTS_VOLUME|SD_OBJECT_SHADOW_CATCHER)
 };
 
 #ifdef __SPLIT_KERNEL__
@@ -860,6 +908,7 @@ typedef struct PathState {
 	int glossy_bounce;
 	int transmission_bounce;
 	int transparent_bounce;
+	float path_length;
 
 	/* multiple importance sampling */
 	float min_ray_pdf; /* smallest bounce pdf over entire path up to now */
@@ -873,6 +922,10 @@ typedef struct PathState {
 	int volume_bounce;
 	RNG rng_congruential;
 	VolumeStack volume_stack[VOLUME_STACK_SIZE];
+#endif
+
+#ifdef __SHADOW_TRICKS__
+	int catcher_object;
 #endif
 } PathState;
 
@@ -1027,12 +1080,24 @@ typedef struct KernelFilm {
 	int pass_shadow;
 	float pass_shadow_scale;
 	int filter_table_offset;
-	int pass_pad2;
 
 	int pass_mist;
 	float mist_start;
 	float mist_inv_depth;
 	float mist_falloff;
+
+	int pass_denoising;
+	int pass_no_denoising;
+	int denoise_flag;
+	int frames;
+
+	int num_frames;
+	int prev_frames;
+	int denoise_cross;
+	int light_groups;
+	int pass_light_groups;
+	int world_light_groups;
+	int pad1, pad2, pad3;
 
 #ifdef __KERNEL_DEBUG__
 	int pass_bvh_traversal_steps;
@@ -1067,6 +1132,7 @@ typedef struct KernelIntegrator {
 	float pdf_lights;
 	float inv_pdf_lights;
 	int pdf_background_res;
+	float light_inv_rr_threshold;
 
 	/* light portals */
 	float portal_pdf;
@@ -1116,15 +1182,22 @@ typedef struct KernelIntegrator {
 	/* sampler */
 	int sampling_pattern;
 	int aa_samples;
+	int dither_size;
+	float scrambling_distance;
 
 	/* volume render */
 	int use_volumes;
 	int volume_max_steps;
 	float volume_step_size;
 	int volume_samples;
+	/* denoiser */
+	int half_window;
+	float filter_strength;
+	float weighting_adjust;
+	int use_gradients;
+	int use_nlm_weights;
 
-	float light_inv_rr_threshold;
-
+	int ies_stride;
 	int pad1;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
@@ -1268,6 +1341,45 @@ enum RayState {
 #define PATCH_MAP_NODE_IS_SET (1 << 30)
 #define PATCH_MAP_NODE_IS_LEAF (1u << 31)
 #define PATCH_MAP_NODE_INDEX_MASK (~(PATCH_MAP_NODE_IS_SET | PATCH_MAP_NODE_IS_LEAF))
+
+/* Enabling second-order screen features will preserve shadow edges better, but currently may cause artifacts in smooth areas. */
+#undef DENOISE_SECOND_ORDER_SCREEN
+#define DENOISE_TEMPORAL
+#ifdef DENOISE_SECOND_ORDER_SCREEN
+#define DENOISE_FEATURES 13 /* The amount of denoising features: Normal, Albedo, Depth, Shadow and screen position (x, y, x^2, y^2, x*y) */
+#elif defined(DENOISE_TEMPORAL)
+#define DENOISE_FEATURES 11 /* The amount of denoising features: Normal, Albedo, Depth, Shadow, screen position (x, y) and frame*/
+#else
+#define DENOISE_FEATURES 10 /* The amount of denoising features: Normal, Albedo, Depth, Shadow and screen position (x, y)*/
+#endif
+
+typedef struct FilterStorage {
+	float transform[DENOISE_FEATURES*DENOISE_FEATURES];
+	float bandwidth[DENOISE_FEATURES];
+	int rank;
+	float global_bandwidth;
+#ifdef WITH_CYCLES_DEBUG_FILTER
+	float filtered_global_bandwidth;
+	float sum_weight;
+	float means[DENOISE_FEATURES], scales[DENOISE_FEATURES], singular[DENOISE_FEATURES];
+	float singular_threshold, feature_matrix_norm;
+	float log_rmse_per_sample;
+#endif
+} FilterStorage;
+
+typedef struct CUDAFilterStorage {
+	float bandwidth[DENOISE_FEATURES];
+	int rank;
+	float global_bandwidth;
+	float est_bias[6], est_variance[6];
+#ifdef WITH_CYCLES_DEBUG_FILTER
+	float filtered_global_bandwidth;
+	float sum_weight;
+	float means[DENOISE_FEATURES], scales[DENOISE_FEATURES], singular[DENOISE_FEATURES];
+	float singular_threshold, feature_matrix_norm;
+	float log_rmse_per_sample;
+#endif
+} CUDAFilterStorage;
 
 CCL_NAMESPACE_END
 

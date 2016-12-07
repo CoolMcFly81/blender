@@ -518,6 +518,19 @@ static ShaderNode *add_node(Scene *scene,
 		}
 		node = hair;
 	}
+	else if(b_node.is_a(&RNA_ShaderNodeBsdfDisney)) {
+		BL::ShaderNodeBsdfDisney b_disney_node(b_node);
+		DisneyBsdfNode *disney = new DisneyBsdfNode();
+		switch (b_disney_node.distribution()) {
+			case BL::ShaderNodeBsdfDisney::distribution_GGX:
+				disney->distribution = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
+				break;
+			case BL::ShaderNodeBsdfDisney::distribution_MULTI_GGX:
+				disney->distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
+				break;
+		}
+		node = disney;
+	}
 	else if(b_node.is_a(&RNA_ShaderNodeBsdfTranslucent)) {
 		node = new TranslucentBsdfNode();
 	}
@@ -782,6 +795,13 @@ static ShaderNode *add_node(Scene *scene,
 		BL::TexMapping b_texture_mapping(b_sky_node.texture_mapping());
 		get_tex_mapping(&sky->tex_mapping, b_texture_mapping);
 		node = sky;
+	}
+	else if(b_node.is_a(&RNA_ShaderNodeIESLight)) {
+		BL::ShaderNodeIESLight b_ies_node(b_node);
+		IESLightNode *ies = new IESLightNode();
+		ies->filename = blender_absolute_path(b_data, b_ntree, b_ies_node.filepath());
+		ies->ies = get_text_content(b_ies_node.ies().ptr);
+		node = ies;
 	}
 	else if(b_node.is_a(&RNA_ShaderNodeNormalMap)) {
 		BL::ShaderNodeNormalMap b_normal_map_node(b_node);

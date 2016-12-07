@@ -97,7 +97,7 @@ ccl_device_noinline void shader_setup_from_ray(KernelGlobals *kg,
 		
 		/* smooth normal */
 		if(ccl_fetch(sd, shader) & SHADER_SMOOTH_NORMAL)
-			ccl_fetch(sd, N) = triangle_smooth_normal(kg, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
+			ccl_fetch(sd, N) = triangle_smooth_normal(kg, Ng, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
 
 #ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -183,7 +183,7 @@ void shader_setup_from_subsurface(
 		sd->N = Ng;
 
 		if(sd->shader & SHADER_SMOOTH_NORMAL)
-			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
+			sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
 
 #  ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -241,8 +241,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
                                                 const float3 I,
                                                 int shader, int object, int prim,
                                                 float u, float v, float t,
-                                                float time,
-                                                bool object_space,
+                                                float time, bool object_space,
                                                 int lamp)
 {
 	/* vectors */
@@ -295,7 +294,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
 	if(ccl_fetch(sd, type) & PRIMITIVE_TRIANGLE) {
 		/* smooth normal */
 		if(ccl_fetch(sd, shader) & SHADER_SMOOTH_NORMAL) {
-			ccl_fetch(sd, N) = triangle_smooth_normal(kg, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
+			ccl_fetch(sd, N) = triangle_smooth_normal(kg, Ng, ccl_fetch(sd, prim), ccl_fetch(sd, u), ccl_fetch(sd, v));
 
 #ifdef __INSTANCING__
 			if(!(ccl_fetch(sd, flag) & SD_TRANSFORM_APPLIED)) {
@@ -509,7 +508,7 @@ ccl_device_inline void _shader_bsdf_multi_eval(KernelGlobals *kg, ShaderData *sd
 			float3 eval = bsdf_eval(kg, sd, sc, omega_in, &bsdf_pdf);
 
 			if(bsdf_pdf != 0.0f) {
-				bsdf_eval_accum(result_eval, sc->type, eval*sc->weight);
+				bsdf_eval_accum(result_eval, sc->type, eval*sc->weight, 1.0f);
 				sum_pdf += bsdf_pdf*sc->sample_weight;
 			}
 
@@ -537,7 +536,8 @@ ccl_device_inline void _shader_bsdf_multi_eval_branched(KernelGlobals *kg,
 				float mis_weight = use_mis? power_heuristic(light_pdf, bsdf_pdf): 1.0f;
 				bsdf_eval_accum(result_eval,
 				                sc->type,
-				                eval * sc->weight * mis_weight);
+				                eval * sc->weight,
+						 mis_weight);
 			}
 		}
 	}
@@ -569,7 +569,7 @@ void shader_bsdf_eval(KernelGlobals *kg,
 		_shader_bsdf_multi_eval(kg, sd, omega_in, &pdf, -1, eval, 0.0f, 0.0f);
 		if(use_mis) {
 			float weight = power_heuristic(light_pdf, pdf);
-			bsdf_eval_mul(eval, weight);
+			bsdf_eval_mis(eval, weight);
 		}
 	}
 }
@@ -925,7 +925,7 @@ ccl_device_inline void _shader_volume_phase_multi_eval(const ShaderData *sd, con
 			float3 eval = volume_phase_eval(sd, sc, omega_in, &phase_pdf);
 
 			if(phase_pdf != 0.0f) {
-				bsdf_eval_accum(result_eval, sc->type, eval);
+				bsdf_eval_accum(result_eval, sc->type, eval, 1.0f);
 				sum_pdf += phase_pdf*sc->sample_weight;
 			}
 
