@@ -24,7 +24,6 @@
 
 #include "blender_util.h"
 
-#include "film.h"
 #include "scene.h"
 #include "session.h"
 
@@ -94,12 +93,6 @@ public:
 	                                      Camera *cam,
 	                                      int width, int height);
 
-	static RenderBuffers* get_render_buffer(Device *device,
-	                                        BL::RenderLayer& b_rl,
-	                                        BL::RenderResult& b_rr,
-                                                int samples);
-	static PassType get_pass_type(BL::RenderPass& b_pass);
-
 private:
 	/* sync */
 	void sync_lamps(bool update_all);
@@ -145,9 +138,6 @@ private:
 	                        BL::Object& b_ob,
 	                        int width, int height,
 	                        float motion_time);
-
-	void sync_light_group(BL::Group b_group,
-	                      int mask);
 
 	/* particles */
 	bool sync_dupli_particle(BL::Object& b_ob,
@@ -213,7 +203,6 @@ private:
 		bool use_viewport_visibility;
 		int samples;
 		bool bound_samples;
-		unordered_map<void*, int> light_group_map;
 	} render_layer;
 
 	Progress &progress;

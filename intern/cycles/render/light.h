@@ -71,8 +71,6 @@ public:
 	int samples;
 	int max_bounces;
 
-	int light_groups;
-
 	void tag_update(Scene *scene);
 
 	/* Check whether the light has contribution the the scene. */

@@ -53,7 +53,6 @@ struct ColorManagedViewSettings;
 
 /* New */
 
-struct RenderResult *render_result_new_preview(struct rcti *partrct);
 struct RenderResult *render_result_new(struct Render *re,
 	struct rcti *partrct, int crop, int savebuffers, const char *layername, const char *viewname);
 struct RenderResult *render_result_new_full_sample(struct Render *re,
@@ -67,11 +66,6 @@ void render_result_views_new(struct RenderResult *rr, struct RenderData *rd);
 /* Merge */
 
 void render_result_merge(struct RenderResult *rr, struct RenderResult *rrpart);
-
-/* Add Pass */
-
-void render_result_clone_passes(struct Render *re, struct RenderResult *rr, const char *viewname);
-void render_result_add_pass(struct RenderResult *rr, uint64_t passtype, int channels, const char *layername, const char *viewname);
 
 /* Free */
 

@@ -695,7 +695,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	oglrender->iuser.ok = 1;
 
 	/* create render result */
-	RE_InitState(oglrender->re, NULL, &scene->r, NULL, NULL, sizex, sizey, NULL);
+	RE_InitState(oglrender->re, NULL, &scene->r, NULL, sizex, sizey, NULL);
 
 	/* create render views */
 	screen_opengl_views_setup(oglrender);
@@ -1111,7 +1111,7 @@ static int screen_opengl_render_invoke(bContext *C, wmOperator *op, const wmEven
 	}
 	
 	oglrender = op->customdata;
-	render_view_open(C, event->x, event->y, op->reports, NULL);
+	render_view_open(C, event->x, event->y, op->reports);
 	
 	/* view may be changed above (R_OUTPUT_WINDOW) */
 	oglrender->win = CTX_wm_window(C);

@@ -107,11 +107,10 @@ public:
 		else if(task->type == DeviceTask::SHADER) {
 			shader(*task);
 		}
-		else if(task->type == DeviceTask::RENDER) {
+		else if(task->type == DeviceTask::PATH_TRACE) {
 			RenderTile tile;
 			/* Keep rendering tiles until done. */
 			while(task->acquire_tile(this, tile)) {
-				assert(tile.task == RenderTile::PATH_TRACE);
 				int start_sample = tile.start_sample;
 				int end_sample = tile.start_sample + tile.num_samples;
 

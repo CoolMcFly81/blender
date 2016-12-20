@@ -102,7 +102,7 @@ ccl_device_inline float area_light_sample(float3 P,
 		float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
 		cu = clamp(cu, -1.0f, 1.0f);
 		/* Compute xu. */
-		float xu = -(cu * z0) / max(sqrtf(1.0f - cu * cu), 1e-7f);
+		float xu = -(cu * z0) / sqrtf(1.0f - cu * cu);
 		xu = clamp(xu, x0, x1);
 		/* Compute yv. */
 		float z0sq = z0 * z0;
@@ -898,18 +898,6 @@ ccl_device int light_select_num_samples(KernelGlobals *kg, int index)
 {
 	float4 data3 = kernel_tex_fetch(__light_data, index*LIGHT_SIZE + 3);
 	return __float_as_int(data3.x);
-}
-
-ccl_device_inline int lamp_light_groups(KernelGlobals *kg, LightSample *ls)
-{
-	if(ls->lamp != LAMP_NONE) {
-		return __float_as_int(kernel_tex_fetch(__light_data, ls->lamp*LIGHT_SIZE + 4).y);
-	}
-	int object = ls->object;
-	if(object < 0) {
-		object = ~object;
-	}
-	return object_light_groups(kg, object);
 }
 
 CCL_NAMESPACE_END

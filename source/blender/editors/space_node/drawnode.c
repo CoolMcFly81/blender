@@ -1092,21 +1092,6 @@ static void node_shader_buts_hair(uiLayout *layout, bContext *UNUSED(C), Pointer
 	uiItemR(layout, ptr, "component", 0, "", ICON_NONE);
 }
 
-static void node_shader_buts_ies(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
-{
-	uiLayout *row;
-
-	row = uiLayoutRow(layout, false);
-	uiItemR(row, ptr, "mode", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
-
-	row = uiLayoutRow(layout, true);
-
-	if (RNA_enum_get(ptr, "mode") == NODE_IES_INTERNAL)
-		uiItemR(row, ptr, "ies", 0, "", ICON_NONE);
-	else
-		uiItemR(row, ptr, "filepath", 0, "", ICON_NONE);
-}
-
 static void node_shader_buts_script(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
 	uiLayout *row;
@@ -1249,7 +1234,6 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 		case SH_NODE_BSDF_GLOSSY:
 		case SH_NODE_BSDF_GLASS:
 		case SH_NODE_BSDF_REFRACTION:
-		case SH_NODE_BSDF_DISNEY:
 			ntype->draw_buttons = node_shader_buts_glossy;
 			break;
 		case SH_NODE_BSDF_ANISOTROPIC:
@@ -1276,9 +1260,6 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 			break;
 		case SH_NODE_OUTPUT_LINESTYLE:
 			ntype->draw_buttons = node_buts_output_linestyle;
-			break;
-		case SH_NODE_IESLIGHT:
-			ntype->draw_buttons = node_shader_buts_ies;
 			break;
 	}
 }
@@ -3630,24 +3611,6 @@ void node_draw_link_straight(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 }
 #endif
 
-static bool node_link_types_valid(bNodeLink *link)
-{
-	eNodeSocketDatatype from, to;
-
-	if(!link->fromsock || !link->tosock)
-		return true;
-
-	from = link->fromsock->type;
-	to = link->tosock->type;
-
-	/* These two types can only be connected to another socket of the same type. */
-	if(from == SOCK_SHADER || to == SOCK_SHADER ||
-	   from == SOCK_STRING || to == SOCK_STRING)
-		return (from == to);
-
-	return true;
-}
-
 /* note; this is used for fake links in groups too */
 void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 {
@@ -3670,7 +3633,7 @@ void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 		if (link->fromsock->flag & SOCK_UNAVAIL)
 			return;
 		
-		if (link->flag & NODE_LINK_VALID && node_link_types_valid(link)) {
+		if (link->flag & NODE_LINK_VALID) {
 			/* special indicated link, on drop-node */
 			if (link->flag & NODE_LINKFLAG_HILITE) {
 				th_col1 = th_col2 = TH_ACTIVE;

@@ -1096,9 +1096,11 @@ void OSLCompiler::compile(Scene *scene, OSLGlobals *og, Shader *shader)
 		/* finalize */
 		shader->graph->finalize(scene,
 		                        false,
+		                        true,
 		                        shader->has_integrator_dependency);
 		if(shader->graph_bump) {
 			shader->graph_bump->finalize(scene,
+			                             true,
 			                             true,
 			                             shader->has_integrator_dependency,
 			                             shader->displacement_method == DISPLACE_BOTH);

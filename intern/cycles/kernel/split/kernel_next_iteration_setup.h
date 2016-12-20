@@ -38,7 +38,6 @@
  * kg (globals) -----------------------------------------|                                 |
  * LightRay_dl_coop -------------------------------------|
  * ISLamp_coop ------------------------------------------|
- * light_groups_coop ------------------------------------|
  * BSDFEval_coop ----------------------------------------|
  * LightRay_ao_coop -------------------------------------|
  * AOBSDF_coop ------------------------------------------|
@@ -70,7 +69,6 @@ ccl_device char kernel_next_iteration_setup(
         ccl_global PathState *PathState_coop, /* Required for setting up ray for next iteration */
         ccl_global Ray *LightRay_dl_coop,     /* Required for radiance update - direct lighting */
         ccl_global int *ISLamp_coop,          /* Required for radiance update - direct lighting */
-        ccl_global int *light_groups_coop,    /* Required for radiance update - direct lighting */
         ccl_global BsdfEval *BSDFEval_coop,   /* Required for radiance update - direct lighting */
         ccl_global Ray *LightRay_ao_coop,     /* Required for radiance update - AO */
         ccl_global float3 *AOBSDF_coop,       /* Required for radiance update - AO */
@@ -119,8 +117,7 @@ ccl_device char kernel_next_iteration_setup(
 				                          shadow,
 				                          1.0f,
 				                          state->bounce,
-				                          ISLamp_coop[ray_index],
-				                          light_groups_coop[ray_index]);
+				                          ISLamp_coop[ray_index]);
 			}
 			REMOVE_RAY_FLAG(ray_state, ray_index, RAY_SHADOW_RAY_CAST_DL);
 		}

@@ -267,23 +267,11 @@ void BlenderSync::sync_integrator()
 		}
 	}
 
-	int sampling_pattern = get_enum(cscene, "sampling_pattern");
-	switch(sampling_pattern) {
-		case 1: /* Dithered Sobol */
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = true;
-			break;
-		case 2: /* Correlated Multi-Jittered */
-			integrator->sampling_pattern = SAMPLING_PATTERN_CMJ;
-			integrator->use_dithered_sampling = false;
-			break;
-		case 0: /* Sobol */
-		default:
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = false;
-			break;
-	}
-	integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+	integrator->sampling_pattern = (SamplingPattern)get_enum(
+	        cscene,
+	        "sampling_pattern",
+	        SAMPLING_NUM_PATTERNS,
+	        SAMPLING_PATTERN_SOBOL);
 
 	integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
 	integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
@@ -379,17 +367,6 @@ void BlenderSync::sync_film()
 
 /* Render Layer */
 
-void BlenderSync::sync_light_group(BL::Group b_group,
-                                   int mask)
-{
-	if(!b_group) return;
-	BL::Group::objects_iterator b_ob;
-	for(b_group.objects.begin(b_ob); b_ob != b_group.objects.end(); ++b_ob)
-	{
-		render_layer.light_group_map[*b_ob] |= mask;
-	}
-}
-
 void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
@@ -415,7 +392,6 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 			render_layer.use_viewport_visibility = true;
 			render_layer.samples = 0;
 			render_layer.bound_samples = false;
-			render_layer.light_group_map.clear();
 			return;
 		}
 	}
@@ -456,23 +432,6 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 				else
 					render_layer.samples = samples;
 			}
-
-			render_layer.light_group_map.clear();
-			int light_groups_world = 0;
-#define LIGHT_GROUP(i) \
-			sync_light_group(b_rlay->light_group_##i(), 1 << (i - 1)); \
-			if(b_rlay->light_group_##i##_world()) light_groups_world |= (1 << (i - 1));
-
-			LIGHT_GROUP(1);
-			LIGHT_GROUP(2);
-			LIGHT_GROUP(3);
-			LIGHT_GROUP(4);
-			LIGHT_GROUP(5);
-			LIGHT_GROUP(6);
-			LIGHT_GROUP(7);
-			LIGHT_GROUP(8);
-#undef LIGHT_GROUP
-			render_layer.light_group_map[b_scene.world()] = light_groups_world;
 		}
 
 		first_layer = false;
@@ -761,150 +720,6 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
 	}
 
 	return params;
-}
-
-PassType BlenderSync::get_pass_type(BL::RenderPass& b_pass)
-{
-	switch(b_pass.type()) {
-		case BL::RenderPass::type_COMBINED:
-			return PASS_COMBINED;
-
-		case BL::RenderPass::type_Z:
-			return PASS_DEPTH;
-		case BL::RenderPass::type_MIST:
-			return PASS_MIST;
-		case BL::RenderPass::type_NORMAL:
-			return PASS_NORMAL;
-		case BL::RenderPass::type_OBJECT_INDEX:
-			return PASS_OBJECT_ID;
-		case BL::RenderPass::type_UV:
-			return PASS_UV;
-		case BL::RenderPass::type_VECTOR:
-			return PASS_MOTION;
-		case BL::RenderPass::type_MATERIAL_INDEX:
-			return PASS_MATERIAL_ID;
-
-		case BL::RenderPass::type_DIFFUSE_DIRECT:
-			return PASS_DIFFUSE_DIRECT;
-		case BL::RenderPass::type_GLOSSY_DIRECT:
-			return PASS_GLOSSY_DIRECT;
-		case BL::RenderPass::type_TRANSMISSION_DIRECT:
-			return PASS_TRANSMISSION_DIRECT;
-		case BL::RenderPass::type_SUBSURFACE_DIRECT:
-			return PASS_SUBSURFACE_DIRECT;
-
-		case BL::RenderPass::type_DIFFUSE_INDIRECT:
-			return PASS_DIFFUSE_INDIRECT;
-		case BL::RenderPass::type_GLOSSY_INDIRECT:
-			return PASS_GLOSSY_INDIRECT;
-		case BL::RenderPass::type_TRANSMISSION_INDIRECT:
-			return PASS_TRANSMISSION_INDIRECT;
-		case BL::RenderPass::type_SUBSURFACE_INDIRECT:
-			return PASS_SUBSURFACE_INDIRECT;
-
-		case BL::RenderPass::type_DIFFUSE_COLOR:
-			return PASS_DIFFUSE_COLOR;
-		case BL::RenderPass::type_GLOSSY_COLOR:
-			return PASS_GLOSSY_COLOR;
-		case BL::RenderPass::type_TRANSMISSION_COLOR:
-			return PASS_TRANSMISSION_COLOR;
-		case BL::RenderPass::type_SUBSURFACE_COLOR:
-			return PASS_SUBSURFACE_COLOR;
-
-		case BL::RenderPass::type_EMIT:
-			return PASS_EMISSION;
-		case BL::RenderPass::type_ENVIRONMENT:
-			return PASS_BACKGROUND;
-		case BL::RenderPass::type_AO:
-			return PASS_AO;
-		case BL::RenderPass::type_SHADOW:
-			return PASS_SHADOW;
-
-		case BL::RenderPass::type_DIFFUSE:
-		case BL::RenderPass::type_COLOR:
-		case BL::RenderPass::type_REFRACTION:
-		case BL::RenderPass::type_SPECULAR:
-		case BL::RenderPass::type_REFLECTION:
-			return PASS_NONE;
-#ifdef WITH_CYCLES_DEBUG
-		case BL::RenderPass::type_DEBUG:
-		{
-			if(b_pass.debug_type() == BL::RenderPass::debug_type_BVH_TRAVERSAL_STEPS)
-				return PASS_BVH_TRAVERSAL_STEPS;
-			if(b_pass.debug_type() == BL::RenderPass::debug_type_BVH_TRAVERSED_INSTANCES)
-				return PASS_BVH_TRAVERSED_INSTANCES;
-			if(b_pass.debug_type() == BL::RenderPass::debug_type_RAY_BOUNCES)
-				return PASS_RAY_BOUNCES;
-			break;
-		}
-#endif
-	}
-
-	return PASS_NONE;
-}
-
-RenderBuffers* BlenderSync::get_render_buffer(Device *device,
-                                              BL::RenderLayer& b_rl,
-                                              BL::RenderResult& b_rr,
-                                              int samples)
-{
-	BufferParams params;
-	params.width  = params.full_width  = params.final_width  = b_rr.resolution_x();
-	params.height = params.full_height = params.final_height = b_rr.resolution_y();
-
-	params.full_x = params.full_y = 0;
-
-	BL::RenderLayer::passes_iterator b_pass;
-
-	int denoising_passes = 0;
-	for(b_rl.passes.begin(b_pass); b_pass != b_rl.passes.end(); ++b_pass) {
-		PassType type = get_pass_type(*b_pass);
-		if(type != PASS_NONE)
-			Pass::add(type, params.passes);
-
-		int extended_type = b_pass->extended_type();
-		if(extended_type) {
-			denoising_passes |= extended_type;
-			if(extended_type == EX_TYPE_DENOISE_CLEAN)
-				params.selective_denoising = true;
-		}
-	}
-	params.denoising_passes = ((~denoising_passes & EX_TYPE_DENOISE_REQUIRED) == 0);
-
-	RenderBuffers *buffer = new RenderBuffers(device);
-	buffer->reset(device, params);
-
-	int4 rect = make_int4(0, 0, params.width, params.height);
-
-	/* Some passes are divided by another pass when exporting to a RenderPass.
-	 * Therefore, these passes need to be multiplied when importing, so some passes must be imported before others. */
-	PassType import_first_array[] = {PASS_DIFFUSE_COLOR, PASS_GLOSSY_COLOR, PASS_TRANSMISSION_COLOR, PASS_SUBSURFACE_COLOR, PASS_MOTION_WEIGHT};
-	std::set<PassType> import_first(import_first_array, import_first_array + 5);
-	for(b_rl.passes.begin(b_pass); b_pass != b_rl.passes.end(); ++b_pass) {
-		if(b_pass->extended_type()) continue;
-
-		PassType type = get_pass_type(*b_pass);
-		if(!import_first.count(type)) continue;
-
-		BL::DynamicArray<float> b_rect = b_pass->rect();
-		buffer->get_pass_rect(type, 1.0f, samples, b_pass->channels(), rect, b_rect.data, true);
-	}
-
-	for(b_rl.passes.begin(b_pass); b_pass != b_rl.passes.end(); ++b_pass) {
-		int extended_type = b_pass->extended_type();
-		PassType type = get_pass_type(*b_pass);
-		if(import_first.count(type)) continue;
-
-		BL::DynamicArray<float> b_rect = b_pass->rect();
-		if(extended_type)
-			buffer->get_denoising_rect(extended_type, 1.0f, samples, b_pass->channels(), rect, b_rect.data, true);
-		else
-			buffer->get_pass_rect(type, 1.0f, samples, b_pass->channels(), rect, b_rect.data, true);
-	}
-
-	buffer->copy_to_device();
-
-	return buffer;
 }
 
 CCL_NAMESPACE_END
