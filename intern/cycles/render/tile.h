@@ -31,12 +31,20 @@ public:
 	int index;
 	int x, y, w, h;
 	int device;
+	/* RENDER: The tile has to be rendered.
+	 * RENDERED: The tile has been rendered, but can't be denoised yet (waiting for neighbors).
+	 * DENOISE: The tile can be denoised now.
+	 * DENOISED: The tile has been denoised, but can't be freed yet (waiting for neighbors).
+	 * DONE: The tile is finished and has been freed. */
+	typedef enum { RENDER = 0, RENDERED, DENOISE, DENOISED, DONE } TileState;
+	TileState state;
+	RenderBuffers *buffers;
 
 	Tile()
 	{}
 
-	Tile(int index_, int x_, int y_, int w_, int h_, int device_)
-	: index(index_), x(x_), y(y_), w(w_), h(h_), device(device_) {}
+	Tile(int index_, int x_, int y_, int w_, int h_, int device_, TileState state_ = RENDER, RenderBuffers *buffers_ = NULL)
+	: index(index_), x(x_), y(y_), w(w_), h(h_), device(device_), state(state_), buffers(buffers_) {}
 };
 
 /* Tile order */
@@ -58,7 +66,10 @@ public:
 	BufferParams params;
 
 	struct State {
+		vector<Tile> tiles;
+		int tile_stride;
 		BufferParams buffer;
+		RenderBuffers *global_buffers;
 		int sample;
 		int num_samples;
 		int resolution_divider;
@@ -68,21 +79,26 @@ public:
 		/* Total samples over all pixels: Generally num_samples*num_pixels,
 		 * but can be higher due to the initial resolution division for previews. */
 		uint64_t total_pixel_samples;
-		/* This vector contains a list of tiles for every logical device in the session.
-		 * In each list, the tiles are sorted according to the tile order setting. */
-		vector<list<Tile> > tiles;
+
+		/* These lists contain the indices of the tiles to be rendered/denoised and are used
+		 * when acquiring a new tile for the device.
+		 * Each list in each vector is for one logical device. */
+		vector<list<int> > render_tiles;
+		vector<list<int> > denoise_tiles;
 	} state;
 
 	int num_samples;
 
 	TileManager(bool progressive, int num_samples, int2 tile_size, int start_resolution,
-	            bool preserve_tile_device, bool background, TileOrder tile_order, int num_devices = 1);
+	            bool preserve_tile_device, bool background, TileOrder tile_order, int num_devices = 1, bool only_denoise = false);
 	~TileManager();
 
+	void free_device();
 	void reset(BufferParams& params, int num_samples);
 	void set_samples(int num_samples);
 	bool next();
-	bool next_tile(Tile& tile, int device = 0);
+	bool next_tile(Tile* &tile, int device = 0);
+	bool return_tile(int index, bool& delete_tile);
 	bool done();
 
 	void set_tile_order(TileOrder tile_order_) { tile_order = tile_order_; }
@@ -97,6 +113,10 @@ public:
 
 	/* Get number of actual samples to render. */
 	int get_num_effective_samples();
+
+	/* Schedule tiles for denoising after they've been rendered.
+	 * Only used for denoising on CPUs, for GPUs the tiles are simply rendered with a bit of overscan. */
+	bool schedule_denoising;
 protected:
 
 	void set_tiles();
@@ -106,6 +126,10 @@ protected:
 	TileOrder tile_order;
 	int start_resolution;
 	int num_devices;
+
+	/* If this flag is set, the TileManager will only generate tiles for denoising,
+	 * not for rendering. */
+	bool only_denoise;
 
 	/* in some cases it is important that the same tile will be returned for the same
 	 * device it was originally generated for (i.e. viewport rendering when buffer is

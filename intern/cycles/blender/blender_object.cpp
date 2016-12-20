@@ -109,6 +109,8 @@ void BlenderSync::sync_light(BL::Object& b_parent,
 	
 	BL::Lamp b_lamp(b_ob.data());
 
+	light->light_groups = render_layer.light_group_map[b_ob];
+
 	/* type */
 	switch(b_lamp.type()) {
 		case BL::Lamp::type_POINT: {
@@ -154,6 +156,8 @@ void BlenderSync::sync_light(BL::Object& b_parent,
 	/* location and (inverted!) direction */
 	light->co = transform_get_column(&tfm, 3);
 	light->dir = -transform_get_column(&tfm, 2);
+	light->tfm = tfm;
+
 	light->tfm = tfm;
 
 	/* shader */
@@ -212,6 +216,7 @@ void BlenderSync::sync_background_light(bool use_portal)
 			    world_recalc ||
 			    b_world.ptr.data != world_map)
 			{
+				light->light_groups = render_layer.light_group_map[b_world];
 				light->type = LIGHT_BACKGROUND;
 				light->map_resolution  = get_int(cworld, "sample_map_resolution");
 				light->shader = scene->default_background;
@@ -313,6 +318,8 @@ Object *BlenderSync::sync_object(BL::Object& b_parent,
 	/* mesh sync */
 	object->mesh = sync_mesh(b_ob, object_updated, hide_tris);
 
+	object->light_groups = render_layer.light_group_map[b_ob];
+
 	/* special case not tracked by object update flags */
 
 	/* holdout */
@@ -340,6 +347,13 @@ Object *BlenderSync::sync_object(BL::Object& b_parent,
 
 	if(visibility != object->visibility) {
 		object->visibility = visibility;
+		object_updated = true;
+	}
+
+	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
+	bool is_shadow_catcher = get_boolean(cobject, "is_shadow_catcher");
+	if(is_shadow_catcher != object->is_shadow_catcher) {
+		object->is_shadow_catcher = is_shadow_catcher;
 		object_updated = true;
 	}
 

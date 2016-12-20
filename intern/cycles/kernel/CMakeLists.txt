@@ -13,6 +13,11 @@ set(INC_SYS
 
 set(SRC
 	kernels/cpu/kernel.cpp
+	kernels/cpu/kernel_sse2.cpp
+	kernels/cpu/kernel_sse3.cpp
+	kernels/cpu/kernel_sse41.cpp
+	kernels/cpu/kernel_avx.cpp
+	kernels/cpu/kernel_avx2.cpp
 	kernels/opencl/kernel.cl
 	kernels/opencl/kernel_data_init.cl
 	kernels/opencl/kernel_queue_enqueue.cl
@@ -109,6 +114,8 @@ set(SRC_CLOSURE_HEADERS
 	closure/bssrdf.h
 	closure/emissive.h
 	closure/volume.h
+	closure/bsdf_disney_diffuse.h
+	closure/bsdf_disney_sheen.h
 )
 
 set(SRC_SVM_HEADERS
@@ -131,6 +138,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_geometry.h
 	svm/svm_gradient.h
 	svm/svm_hsv.h
+	svm/svm_ies.h
 	svm/svm_image.h
 	svm/svm_invert.h
 	svm/svm_light_path.h
@@ -180,6 +188,7 @@ set(SRC_UTIL_HEADERS
 	../util/util_hash.h
 	../util/util_math.h
 	../util/util_math_fast.h
+	../util/util_math_matrix.h
 	../util/util_static_assert.h
 	../util/util_transform.h
 	../util/util_texture.h
@@ -198,6 +207,18 @@ set(SRC_SPLIT_HEADERS
 	split/kernel_shadow_blocked.h
 	split/kernel_split_common.h
 	split/kernel_sum_all_radiance.h
+)
+
+set(SRC_FILTER_HEADERS
+	filter/filter.h
+	filter/filter_features.h
+	filter/filter_features_sse.h
+	filter/filter_final_pass_impl.h
+	filter/filter_nlm.h
+	filter/filter_prefilter.h
+	filter/filter_wlr.h
+	filter/filter_wlr_cuda.h
+	filter/filter_wlr_sse.h
 )
 
 # CUDA module
@@ -232,6 +253,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 		${SRC_GEOM_HEADERS}
 		${SRC_CLOSURE_HEADERS}
 		${SRC_UTIL_HEADERS}
+		${SRC_FILTER_HEADERS}
 	)
 	set(cuda_cubins)
 
@@ -248,6 +270,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
 			set(cuda_debug_flags "-D__KERNEL_DEBUG__")
 		else()
 			set(cuda_debug_flags "")
+		endif()
+
+		if(WITH_CYCLES_DEBUG_FILTER)
+			set(cuda_filter_debug_flags "-DWITH_CYCLES_DEBUG_FILTER")
+		else()
+			set(cuda_filter_debug_flags "")
 		endif()
 
 		set(cuda_nvcc_command ${CUDA_NVCC_EXECUTABLE})
@@ -270,6 +298,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 					${cuda_math_flags}
 					${cuda_extra_flags}
 					${cuda_debug_flags}
+					${cuda_filter_debug_flags}
 					-I${CMAKE_CURRENT_SOURCE_DIR}/../util
 					-I${CMAKE_CURRENT_SOURCE_DIR}/svm
 					-DCCL_NAMESPACE_BEGIN=
@@ -308,28 +337,16 @@ include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})
 
 if(CXX_HAS_SSE)
-	list(APPEND SRC
-		kernels/cpu/kernel_sse2.cpp
-		kernels/cpu/kernel_sse3.cpp
-		kernels/cpu/kernel_sse41.cpp
-	)
-
 	set_source_files_properties(kernels/cpu/kernel_sse2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE2_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_sse3.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE3_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_sse41.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE41_KERNEL_FLAGS}")
 endif()
 
 if(CXX_HAS_AVX)
-	list(APPEND SRC
-		kernels/cpu/kernel_avx.cpp
-	)
 	set_source_files_properties(kernels/cpu/kernel_avx.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX_KERNEL_FLAGS}")
 endif()
 
 if(CXX_HAS_AVX2)
-	list(APPEND SRC
-		kernels/cpu/kernel_avx2.cpp
-	)
 	set_source_files_properties(kernels/cpu/kernel_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
 endif()
 
@@ -342,6 +359,7 @@ add_library(cycles_kernel
 	${SRC_SVM_HEADERS}
 	${SRC_GEOM_HEADERS}
 	${SRC_SPLIT_HEADERS}
+	${SRC_FILTER_HEADERS}
 )
 
 if(WITH_CYCLES_CUDA)
@@ -378,4 +396,5 @@ delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SVM_HEADERS}" ${CYCLES_INSTAL
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_GEOM_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/geom)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SPLIT_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/split)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_FILTER_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/filter)
 

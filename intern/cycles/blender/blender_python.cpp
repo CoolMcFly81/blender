@@ -29,6 +29,12 @@
 #include "util_string.h"
 #include "util_types.h"
 
+#include "denoising.h"
+
+extern "C" {
+#include "bpy_rna.h"
+}
+
 #ifdef WITH_OSL
 #include "osl.h"
 
@@ -676,6 +682,71 @@ static PyObject *set_resumable_chunks_func(PyObject * /*self*/, PyObject *args)
 	Py_RETURN_NONE;
 }
 
+static PyObject *save_preview_func(PyObject * /*self*/, PyObject *value)
+{
+	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(value);
+
+	python_thread_state_save(&session->python_thread_state);
+
+	BL::RenderResult rr = session->save_preview();
+
+	python_thread_state_restore(&session->python_thread_state);
+
+	return pyrna_struct_CreatePyObject(&rr.ptr);
+}
+
+static PyObject *can_postprocess_func(PyObject * /*self*/, PyObject *args)
+{
+	PyObject *pyresult;
+
+	if(!PyArg_ParseTuple(args, "O", &pyresult))
+		return NULL;
+
+	/* RNA */
+	PointerRNA resultptr;
+	RNA_pointer_create(NULL, &RNA_RenderResult, (void*)PyLong_AsVoidPtr(pyresult), &resultptr);
+	BL::RenderResult b_rr(resultptr);
+
+	bool can_denoise = can_denoise_render_result(b_rr);
+
+	return Py_BuildValue("i", can_denoise? 1: 0);
+}
+
+static PyObject *postprocess_func(PyObject * /*self*/, PyObject *args)
+{
+	PyObject *pyresult, *pyengine, *pyuserpref, *pyscene;
+
+	if(!PyArg_ParseTuple(args, "OOOO", &pyengine, &pyuserpref, &pyscene, &pyresult))
+		return NULL;
+
+	/* RNA */
+	PointerRNA engineptr;
+	RNA_pointer_create(NULL, &RNA_RenderEngine, (void*)PyLong_AsVoidPtr(pyengine), &engineptr);
+	BL::RenderEngine engine(engineptr);
+
+	PointerRNA userprefptr;
+	RNA_pointer_create(NULL, &RNA_UserPreferences, (void*)PyLong_AsVoidPtr(pyuserpref), &userprefptr);
+	BL::UserPreferences userpref(userprefptr);
+
+	PointerRNA sceneptr;
+	RNA_pointer_create(NULL, &RNA_Scene, (void*)PyLong_AsVoidPtr(pyscene), &sceneptr);
+	BL::Scene scene(sceneptr);
+
+	PointerRNA resultptr;
+	RNA_pointer_create(NULL, &RNA_RenderResult, (void*)PyLong_AsVoidPtr(pyresult), &resultptr);
+	BL::RenderResult b_rr(resultptr);
+
+	BlenderSession session(engine, userpref, scene);
+
+	python_thread_state_save(&session.python_thread_state);
+
+	session.denoise(b_rr);
+
+	python_thread_state_restore(&session.python_thread_state);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject *get_device_types_func(PyObject * /*self*/, PyObject * /*args*/)
 {
 	vector<DeviceInfo>& devices = Device::available_devices();
@@ -689,6 +760,41 @@ static PyObject *get_device_types_func(PyObject * /*self*/, PyObject * /*args*/)
 	PyTuple_SET_ITEM(list, 1, PyBool_FromLong(has_opencl));
 	return list;
 }
+
+static PyObject *denoise_files_func(PyObject * /*self*/, PyObject *args, PyObject *keywords)
+{
+	SessionParams session_params;
+	session_params.samples = 128;
+	session_params.threads = 0;
+
+	PyObject *pyframelist;
+	int midframe, half_output = 0;
+	const char *output = NULL;
+
+	static const char* keylist[] = {"frames", "midframe", "output", "half_float", "samples", "threads", "tile_x", "tile_y", "filter_strength"};
+	if(!PyArg_ParseTupleAndKeywords(args, keywords, "Ois|piiiif", const_cast<char **>(keylist), &pyframelist, &midframe, &output, &half_output,
+	                                &session_params.samples, &session_params.threads, &session_params.tile_size.x, &session_params.tile_size.y, &session_params.filter_strength)) {
+		return NULL;
+	}
+	session_params.output_half_float = (half_output > 0);
+	session_params.output_path = string(output);
+
+	int numframes = PyList_Size(pyframelist);
+	if(numframes < 1) {
+		Py_RETURN_FALSE;
+	}
+
+	vector<string> frames;
+	for(int i = 0; i < numframes; i++) {
+		frames.push_back(_PyUnicode_AsString(PyList_GetItem(pyframelist, i)));
+	}
+
+	if(denoise_standalone(session_params, frames, midframe)) {
+		Py_RETURN_TRUE;
+	}
+	Py_RETURN_FALSE;
+}
+
 
 static PyMethodDef methods[] = {
 	{"init", init_func, METH_VARARGS, ""},
@@ -710,12 +816,18 @@ static PyMethodDef methods[] = {
 	{"opencl_disable", opencl_disable_func, METH_NOARGS, ""},
 #endif
 
+	{"can_postprocess", can_postprocess_func, METH_VARARGS, ""},
+	{"postprocess", postprocess_func, METH_VARARGS, ""},
+	{"denoise_files", (PyCFunction)denoise_files_func, METH_VARARGS|METH_KEYWORDS, ""},
+
 	/* Debugging routines */
 	{"debug_flags_update", debug_flags_update_func, METH_VARARGS, ""},
 	{"debug_flags_reset", debug_flags_reset_func, METH_NOARGS, ""},
 
 	/* Resumable render */
 	{"set_resumable_chunks", set_resumable_chunks_func, METH_VARARGS, ""},
+
+	{"save_preview", save_preview_func, METH_O, ""},
 
 	/* Compute Device selection */
 	{"get_device_types", get_device_types_func, METH_VARARGS, ""},

@@ -238,7 +238,7 @@ void RE_FreeRenderResult(RenderResult *res)
 	render_result_free(res);
 }
 
-float *RE_RenderLayerGetPass(volatile RenderLayer *rl, int passtype, const char *viewname)
+float *RE_RenderLayerGetPass(volatile RenderLayer *rl, uint64_t passtype, const char *viewname)
 {
 	RenderPass *rpass = RE_pass_find_by_type(rl, passtype, viewname);
 	return rpass ? rpass->rect : NULL;
@@ -334,6 +334,14 @@ void RE_SwapResult(Render *re, RenderResult **rr)
 	if (re) {
 		SWAP(RenderResult *, re->result, *rr);
 	}
+}
+
+void RE_SetResult(Render *re, RenderResult *rr)
+{
+	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+	render_result_free(re->result);
+	re->result = rr;
+	BLI_rw_mutex_unlock(&re->resultmutex);
 }
 
 
@@ -699,7 +707,7 @@ void render_copy_renderdata(RenderData *to, RenderData *from)
 /* what doesn't change during entire render sequence */
 /* disprect is optional, if NULL it assumes full window render */
 void RE_InitState(Render *re, Render *source, RenderData *rd,
-                  SceneRenderLayer *srl,
+                  SceneRenderLayer *srl, RenderResult *rr,
                   int winx, int winy, rcti *disprect)
 {
 	bool had_freestyle = (re->r.mode & R_EDGE_FRS) != 0;
@@ -770,9 +778,12 @@ void RE_InitState(Render *re, Render *source, RenderData *rd,
 	make_sample_tables(re);
 	
 	/* if preview render, we try to keep old result */
-	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+	if (!rr) BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
 
-	if (re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW)) {
+	if (rr) {
+		re->result = rr;
+	}
+	else if (re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW)) {
 		if (had_freestyle || (re->r.mode & R_EDGE_FRS)) {
 			/* freestyle manipulates render layers so always have to free */
 			render_result_free(re->result);
@@ -818,7 +829,7 @@ void RE_InitState(Render *re, Render *source, RenderData *rd,
 	/* ensure renderdatabase can use part settings correct */
 	RE_parts_clamp(re);
 
-	BLI_rw_mutex_unlock(&re->resultmutex);
+	if (!rr) BLI_rw_mutex_unlock(&re->resultmutex);
 	
 	re->mblur_offs = re->field_offs = 0.f;
 	
@@ -1854,6 +1865,7 @@ static void render_result_uncrop(Render *re)
 
 			rres = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, RR_ALL_VIEWS);
 
+			render_result_clone_passes(re, rres, NULL);
 			render_result_merge(rres, re->result);
 			render_result_free(re->result);
 			re->result = rres;
@@ -1924,7 +1936,7 @@ static void render_scene(Render *re, Scene *sce, int cfra)
 	}
 	
 	/* initial setup */
-	RE_InitState(resc, re, &sce->r, NULL, winx, winy, &re->disprect);
+	RE_InitState(resc, re, &sce->r, NULL, NULL, winx, winy, &re->disprect);
 
 	/* We still want to use 'rendercache' setting from org (main) scene... */
 	resc->r.scemode = (resc->r.scemode & ~R_EXR_CACHE_FILE) | (re->r.scemode & R_EXR_CACHE_FILE);
@@ -3178,7 +3190,7 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 		BLI_rw_mutex_unlock(&re->resultmutex);
 	}
 	
-	RE_InitState(re, NULL, &scene->r, srl, winx, winy, &disprect);
+	RE_InitState(re, NULL, &scene->r, srl, NULL, winx, winy, &disprect);
 	if (!re->ok)  /* if an error was printed, abort */
 		return 0;
 	
@@ -3804,7 +3816,7 @@ void RE_PreviewRender(Render *re, Main *bmain, Scene *sce)
 	winx = (sce->r.size * sce->r.xsch) / 100;
 	winy = (sce->r.size * sce->r.ysch) / 100;
 
-	RE_InitState(re, NULL, &sce->r, NULL, winx, winy, NULL);
+	RE_InitState(re, NULL, &sce->r, NULL, NULL, winx, winy, NULL);
 
 	re->pool = BKE_image_pool_new();
 
@@ -3857,7 +3869,7 @@ bool RE_ReadRenderResult(Scene *scene, Scene *scenode)
 	re = RE_GetRender(scene->id.name);
 	if (re == NULL)
 		re = RE_NewRender(scene->id.name);
-	RE_InitState(re, NULL, &scene->r, NULL, winx, winy, &disprect);
+	RE_InitState(re, NULL, &scene->r, NULL, NULL, winx, winy, &disprect);
 	re->scene = scene;
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(scene);
 	
@@ -4011,7 +4023,7 @@ bool RE_layers_have_name(struct RenderResult *rr)
 	return false;
 }
 
-RenderPass *RE_pass_find_by_type(volatile RenderLayer *rl, int passtype, const char *viewname)
+RenderPass *RE_pass_find_by_type(volatile RenderLayer *rl, uint64_t passtype, const char *viewname)
 {
 	RenderPass *rp = NULL;
 

@@ -76,6 +76,18 @@ NODE_DEFINE(Integrator)
 	sampling_pattern_enum.insert("sobol", SAMPLING_PATTERN_SOBOL);
 	sampling_pattern_enum.insert("cmj", SAMPLING_PATTERN_CMJ);
 	SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
+	SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
+	SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
+
+	SOCKET_INT(half_window, "Half Window", 8);
+	SOCKET_FLOAT(filter_strength, "Filter Strength", 0.0f);
+	SOCKET_FLOAT(weighting_adjust, "Weighting Adjust", 1.0f);
+	SOCKET_BOOLEAN(use_gradients, "Use Gradients for filtering", true);
+
+	static NodeEnum weights_enum;
+	weights_enum.insert("wlr", FILTER_WEIGHTS_WLR);
+	weights_enum.insert("nlm", FILTER_WEIGHTS_NLM);
+	SOCKET_ENUM(filter_weights, "Filter weight type", weights_enum, FILTER_WEIGHTS_NLM);
 
 	return type;
 }
@@ -163,6 +175,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	}
 
 	kintegrator->sampling_pattern = sampling_pattern;
+	kintegrator->scrambling_distance = scrambling_distance;
 	kintegrator->aa_samples = aa_samples;
 
 	if(light_sampling_threshold > 0.0f) {
@@ -195,6 +208,21 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
 	device->tex_alloc("__sobol_directions", dscene->sobol_directions);
 
+	/* Sobol dithering table */
+	if(use_dithered_sampling) {
+		int dither_size = sobol_dither_matrix_size();
+		float2 *dither_matrix = dscene->sobol_dither.resize(dither_size*dither_size);
+
+		sobol_generate_dither_matrix(dither_matrix);
+
+		device->tex_alloc("__sobol_dither", dscene->sobol_dither);
+
+		kintegrator->dither_size = dither_size;
+	}
+	else {
+		kintegrator->dither_size = 0;
+	}
+
 	/* Clamping. */
 	bool use_sample_clamp = (sample_clamp_direct != 0.0f ||
 	                         sample_clamp_indirect != 0.0f);
@@ -203,13 +231,22 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 		scene->film->tag_update(scene);
 	}
 
+	kintegrator->half_window = half_window;
+	kintegrator->filter_strength = filter_strength;
+	kintegrator->weighting_adjust = weighting_adjust;
+	if(filter_weights != FILTER_WEIGHTS_WLR) kintegrator->weighting_adjust *= 0.5f;
+	kintegrator->use_gradients = use_gradients;
+	kintegrator->filter_weights = filter_weights;
+
 	need_update = false;
 }
 
 void Integrator::device_free(Device *device, DeviceScene *dscene)
 {
 	device->tex_free(dscene->sobol_directions);
+	device->tex_free(dscene->sobol_dither);
 	dscene->sobol_directions.clear();
+	dscene->sobol_dither.clear();
 }
 
 bool Integrator::modified(const Integrator& integrator)

@@ -206,7 +206,10 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "volume_samples", text="Volume")
 
         if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
-            layout.row().prop(cscene, "sampling_pattern", text="Pattern")
+            col = layout.row().column()
+            col.prop(cscene, "sampling_pattern", text="Pattern")
+            col.prop(cscene, "scrambling_distance")
+
 
         for rl in scene.render.layers:
             if rl.samples > 0:
@@ -461,7 +464,9 @@ class CyclesRender_PT_layer_passes(CyclesButtonsPanel, Panel):
         rd = scene.render
         rl = rd.layers.active
 
-        split = layout.split()
+        hlrow = layout.column()
+
+        split = hlrow.split()
 
         col = split.column()
         col.prop(rl, "use_pass_combined")
@@ -509,6 +514,14 @@ class CyclesRender_PT_layer_passes(CyclesButtonsPanel, Panel):
         if hasattr(rd, "debug_pass_type"):
             layout.prop(rd, "debug_pass_type")
 
+        hlrow.label(text="Light Groups:")
+        split = hlrow.split()
+        col = split.column()
+        for i in range(8):
+            row = col.row()
+            row.prop(rl, "light_group_"+str(i+1), text="")
+            row.prop(rl, "light_group_"+str(i+1)+"_world")
+
 
 class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
     bl_label = "Views"
@@ -551,6 +564,48 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
             row = layout.row()
             row.label(text="Camera Suffix:")
             row.prop(rv, "camera_suffix", text="")
+
+
+class CyclesRender_PT_denoising(CyclesButtonsPanel, Panel):
+    bl_label = "Denoising"
+    bl_context = "render_layer"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        rl = rd.layers.active
+        self.layout.prop(rl, "denoise_result", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        rd = scene.render
+        rl = rd.layers.active
+
+        col = layout.column()
+
+        col.prop(rl, "keep_denoise_data")
+
+        sub = col.column(align=True)
+        sub.prop(rl, "half_window")
+        sub.prop(rl, "filter_strength", slider=True)
+        sub.prop(rl, "filter_weighting_adjust", slider=True)
+        sub.prop(rl, "filter_gradients")
+        sub.prop(rl, "filter_weights")
+        sub.prop(rl, "filter_cross")
+
+        sub = col.column(align=True)
+        row = sub.row(align=True)
+        row.prop(rl, "denoise_diffuse_direct", toggle=True)
+        row.prop(rl, "denoise_glossy_direct", toggle=True)
+        row.prop(rl, "denoise_transmission_direct", toggle=True)
+        row.prop(rl, "denoise_subsurface_direct", toggle=True)
+        row = sub.row(align=True)
+        row.prop(rl, "denoise_diffuse_indirect", toggle=True)
+        row.prop(rl, "denoise_glossy_indirect", toggle=True)
+        row.prop(rl, "denoise_transmission_indirect", toggle=True)
+        row.prop(rl, "denoise_subsurface_indirect", toggle=True)
 
 
 class Cycles_PT_post_processing(CyclesButtonsPanel, Panel):
@@ -767,11 +822,14 @@ class CyclesObject_PT_cycles_settings(CyclesButtonsPanel, Panel):
         col = layout.column()
         col.label(text="Performance:")
         row = col.row()
+        flow = layout.column_flow()
+        row = flow.row()
         row.active = scene.render.use_simplify and cscene.use_camera_cull
         row.prop(cob, "use_camera_cull")
         row.active = scene.render.use_simplify and cscene.use_distance_cull
         row.prop(cob, "use_distance_cull")
 
+        flow.prop(cob, "is_shadow_catcher")
 
 class CYCLES_OT_use_shading_nodes(Operator):
     """Enable nodes on a material, world or lamp"""
@@ -1652,6 +1710,7 @@ def draw_pause(self, context):
         if view.viewport_shade == 'RENDERED':
             cscene = scene.cycles
             layername = scene.render.layers.active.name
+            layout.operator("render.save_preview", icon="RENDER_RESULT", text="")
             layout.prop(cscene, "preview_pause", icon="PAUSE", text="")
             layout.prop(cscene, "preview_active_layer", icon="RENDERLAYERS", text=layername)
 
