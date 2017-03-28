@@ -202,8 +202,9 @@ ccl_device_intersect bool scene_intersect(KernelGlobals *kg,
 }
 
 #ifdef __SUBSURFACE__
+/* Note: ray is passed by value to work around a possible CUDA compiler bug. */
 ccl_device_intersect void scene_intersect_subsurface(KernelGlobals *kg,
-                                                     const Ray *ray,
+                                                     const Ray ray,
                                                      SubsurfaceIntersection *ss_isect,
                                                      int subsurface_object,
                                                      uint *lcg_state,
@@ -212,7 +213,7 @@ ccl_device_intersect void scene_intersect_subsurface(KernelGlobals *kg,
 #ifdef __OBJECT_MOTION__
 	if(kernel_data.bvh.have_motion) {
 		return bvh_intersect_subsurface_motion(kg,
-		                                       ray,
+		                                       &ray,
 		                                       ss_isect,
 		                                       subsurface_object,
 		                                       lcg_state,
@@ -220,7 +221,7 @@ ccl_device_intersect void scene_intersect_subsurface(KernelGlobals *kg,
 	}
 #endif /* __OBJECT_MOTION__ */
 	return bvh_intersect_subsurface(kg,
-	                                ray,
+	                                &ray,
 	                                ss_isect,
 	                                subsurface_object,
 	                                lcg_state,
@@ -229,30 +230,63 @@ ccl_device_intersect void scene_intersect_subsurface(KernelGlobals *kg,
 #endif
 
 #ifdef __SHADOW_RECORD_ALL__
-ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals *kg, const Ray *ray, Intersection *isect, uint max_hits, uint *num_hits)
+ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals *kg,
+                                                     const Ray *ray,
+                                                     Intersection *isect,
+                                                     int skip_object,
+                                                     uint max_hits,
+                                                     uint *num_hits)
 {
 #  ifdef __OBJECT_MOTION__
 	if(kernel_data.bvh.have_motion) {
 #    ifdef __HAIR__
-		if(kernel_data.bvh.have_curves)
-			return bvh_intersect_shadow_all_hair_motion(kg, ray, isect, max_hits, num_hits);
+		if(kernel_data.bvh.have_curves) {
+			return bvh_intersect_shadow_all_hair_motion(kg,
+			                                            ray,
+			                                            isect,
+			                                            skip_object,
+			                                            max_hits,
+			                                            num_hits);
+		}
 #    endif /* __HAIR__ */
 
-		return bvh_intersect_shadow_all_motion(kg, ray, isect, max_hits, num_hits);
+		return bvh_intersect_shadow_all_motion(kg,
+		                                       ray,
+		                                       isect,
+		                                       skip_object,
+		                                       max_hits,
+		                                       num_hits);
 	}
 #  endif /* __OBJECT_MOTION__ */
 
 #  ifdef __HAIR__
-	if(kernel_data.bvh.have_curves)
-		return bvh_intersect_shadow_all_hair(kg, ray, isect, max_hits, num_hits);
+	if(kernel_data.bvh.have_curves) {
+		return bvh_intersect_shadow_all_hair(kg,
+		                                     ray,
+		                                     isect,
+		                                     skip_object,
+		                                     max_hits,
+		                                     num_hits);
+	}
 #  endif /* __HAIR__ */
 
 #  ifdef __INSTANCING__
-	if(kernel_data.bvh.have_instancing)
-		return bvh_intersect_shadow_all_instancing(kg, ray, isect, max_hits, num_hits);
+	if(kernel_data.bvh.have_instancing) {
+		return bvh_intersect_shadow_all_instancing(kg,
+		                                           ray,
+		                                           isect,
+		                                           skip_object,
+		                                           max_hits,
+		                                           num_hits);
+	}
 #  endif /* __INSTANCING__ */
 
-	return bvh_intersect_shadow_all(kg, ray, isect, max_hits, num_hits);
+	return bvh_intersect_shadow_all(kg,
+	                                ray,
+	                                isect,
+	                                skip_object,
+	                                max_hits,
+	                                num_hits);
 }
 #endif  /* __SHADOW_RECORD_ALL__ */
 
@@ -357,7 +391,7 @@ ccl_device_inline float3 ray_offset(float3 P, float3 Ng)
 #endif
 }
 
-#if defined(__SHADOW_RECORD_ALL__) || defined (__VOLUME_RECORD_ALL__)
+#if defined(__VOLUME_RECORD_ALL__) || (defined(__SHADOW_RECORD_ALL__) && defined(__KERNEL_CPU__))
 /* ToDo: Move to another file? */
 ccl_device int intersections_compare(const void *a, const void *b)
 {
@@ -373,5 +407,28 @@ ccl_device int intersections_compare(const void *a, const void *b)
 }
 #endif
 
-CCL_NAMESPACE_END
+#if defined(__SHADOW_RECORD_ALL__)
+ccl_device_inline void sort_intersections(Intersection *hits, uint num_hits)
+{
+#ifdef __KERNEL_GPU__
+	/* Use bubble sort which has more friendly memory pattern on GPU. */
+	bool swapped;
+	do {
+		swapped = false;
+		for(int j = 0; j < num_hits - 1; ++j) {
+			if(hits[j].t > hits[j + 1].t) {
+				struct Intersection tmp = hits[j];
+				hits[j] = hits[j + 1];
+				hits[j + 1] = tmp;
+				swapped = true;
+			}
+		}
+		--num_hits;
+	} while(swapped);
+#else
+	qsort(hits, num_hits, sizeof(Intersection), intersections_compare);
+#endif
+}
+#endif  /* __SHADOW_RECORD_ALL__ | __VOLUME_RECORD_ALL__ */
 
+CCL_NAMESPACE_END

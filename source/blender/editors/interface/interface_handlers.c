@@ -2963,7 +2963,7 @@ static bool ui_textedit_copypaste(uiBut *but, uiHandleButtonData *data, const in
 
 		if (pbuf) {
 			if (ui_but_is_utf8(but)) {
-				buf_len -= BLI_utf8_invalid_strip(pbuf, buf_len);
+				buf_len -= BLI_utf8_invalid_strip(pbuf, (size_t)buf_len);
 			}
 
 			ui_textedit_insert_buf(but, data, pbuf, buf_len);
@@ -7005,20 +7005,17 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 			uiItemO(layout, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Online Manual"),
 			        ICON_URL, "WM_OT_doc_view_manual_ui_context");
 
-			WM_operator_properties_create(&ptr_props, "WM_OT_doc_view");
+			ptr_props = uiItemFullO(layout, "WM_OT_doc_view",
+			                            CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Online Python Reference"),
+			                            ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, UI_ITEM_O_RETURN_PROPS);
 			RNA_string_set(&ptr_props, "doc_id", buf);
-			uiItemFullO(layout, "WM_OT_doc_view",
-			            CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Online Python Reference"),
-			            ICON_NONE, ptr_props.data, WM_OP_EXEC_DEFAULT, 0);
 
 			/* XXX inactive option, not for public! */
 #if 0
-			WM_operator_properties_create(&ptr_props, "WM_OT_doc_edit");
+			ptr_props = uiItemFullO(layout, "WM_OT_doc_edit",
+			                            "Submit Description", ICON_NONE, NULL, WM_OP_INVOKE_DEFAULT, UI_ITEM_O_RETURN_PROPS);
 			RNA_string_set(&ptr_props, "doc_id", buf);
 			RNA_string_set(&ptr_props, "doc_new", RNA_property_description(but->rnaprop));
-
-			uiItemFullO(layout, "WM_OT_doc_edit",
-			            "Submit Description", ICON_NONE, ptr_props.data, WM_OP_INVOKE_DEFAULT, 0);
 #endif
 		}
 	}
@@ -7741,7 +7738,8 @@ static void button_activate_state(bContext *C, uiBut *but, uiHandleButtonState s
 		if (ui_but_is_cursor_warp(but)) {
 
 #ifdef USE_CONT_MOUSE_CORRECT
-			if (data->ungrab_mval[0] != FLT_MAX) {
+			/* stereo3d has issues with changing cursor location so rather avoid */
+			if (data->ungrab_mval[0] != FLT_MAX && !WM_stereo3d_enabled(data->window, false)) {
 				int mouse_ungrab_xy[2];
 				ui_block_to_window_fl(data->region, but->block, &data->ungrab_mval[0], &data->ungrab_mval[1]);
 				mouse_ungrab_xy[0] = data->ungrab_mval[0];

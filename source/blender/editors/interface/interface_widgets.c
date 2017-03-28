@@ -881,7 +881,10 @@ static void widget_draw_icon(
 					xs = rect->xmin + ofs;
 			}
 			else {
-				xs = rect->xmin + 4.0f * ofs;
+				if (but->dt == UI_EMBOSS_NONE || but->type == UI_BTYPE_LABEL)
+					xs = rect->xmin + 2.0f * ofs;
+				else
+					xs = rect->xmin + 4.0f * ofs;
 			}
 			ys = (rect->ymin + rect->ymax - height) / 2.0f;
 		}
@@ -1554,11 +1557,15 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 	/* Icons on the left with optional text label on the right */
 	else if (but->flag & UI_HAS_ICON || show_menu_icon) {
 		const BIFIconID icon = (but->flag & UI_HAS_ICON) ? but->icon + but->iconadd : ICON_NONE;
-		const float icon_size = ICON_SIZE_FROM_BUTRECT(rect);
+		const float icon_size = ICON_DEFAULT_WIDTH_SCALE;
 
 		/* menu item - add some more padding so menus don't feel cramped. it must
 		 * be part of the button so that this area is still clickable */
-		if (ui_block_is_menu(but->block))
+		if (ui_block_is_pie_menu(but->block)) {
+			if (but->dt == UI_EMBOSS_RADIAL)
+				rect->xmin += 0.3f * U.widget_unit;
+		}
+		else if (ui_block_is_menu(but->block))
 			rect->xmin += 0.3f * U.widget_unit;
 
 		widget_draw_icon(but, icon, alpha, rect, show_menu_icon);
@@ -1584,7 +1591,7 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 		temp.xmin = temp.xmax - (BLI_rcti_size_y(rect) * 1.08f);
 
 		if (extra_icon_type == UI_BUT_ICONEXTRA_CLEAR) {
-			widget_draw_icon(but, ICON_X, alpha, &temp, false);
+			widget_draw_icon(but, ICON_PANEL_CLOSE, alpha, &temp, false);
 		}
 		else if (extra_icon_type == UI_BUT_ICONEXTRA_EYEDROPPER) {
 			widget_draw_icon(but, ICON_EYEDROPPER, alpha, &temp, false);

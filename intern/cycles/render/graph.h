@@ -201,14 +201,14 @@ public:
 /* Node definition utility macros */
 
 #define SHADER_NODE_CLASS(type) \
-	NODE_DECLARE; \
+	NODE_DECLARE \
 	type(); \
 	virtual ShaderNode *clone() const { return new type(*this); } \
 	virtual void compile(SVMCompiler& compiler); \
 	virtual void compile(OSLCompiler& compiler); \
 
 #define SHADER_NODE_NO_CLONE_CLASS(type) \
-	NODE_DECLARE; \
+	NODE_DECLARE \
 	type(); \
 	virtual void compile(SVMCompiler& compiler); \
 	virtual void compile(OSLCompiler& compiler); \
@@ -240,6 +240,7 @@ public:
 	list<ShaderNode*> nodes;
 	size_t num_node_ids;
 	bool finalized;
+	bool simplified;
 
 	ShaderGraph();
 	~ShaderGraph();
@@ -255,9 +256,9 @@ public:
 	void relink(ShaderNode *node, ShaderOutput *from, ShaderOutput *to);
 
 	void remove_proxy_nodes();
+	void simplify(Scene *scene);
 	void finalize(Scene *scene,
 	              bool do_bump = false,
-	              bool do_osl = false,
 	              bool do_simplify = false,
 	              bool bump_in_object_space = false);
 

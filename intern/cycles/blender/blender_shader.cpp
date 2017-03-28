@@ -28,6 +28,7 @@
 
 #include "util_debug.h"
 #include "util_string.h"
+#include "util_task.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -609,7 +610,8 @@ static ShaderNode *add_node(Scene *scene,
 			bool is_builtin = b_image.packed_file() ||
 			                  b_image.source() == BL::Image::source_GENERATED ||
 			                  b_image.source() == BL::Image::source_MOVIE ||
-			                  b_engine.is_preview();
+			                  (b_engine.is_preview() &&
+			                   b_image.source() != BL::Image::source_SEQUENCE);
 
 			if(is_builtin) {
 				/* for builtin images we're using image datablock name to find an image to
@@ -640,7 +642,8 @@ static ShaderNode *add_node(Scene *scene,
 				        image->filename.string(),
 				        image->builtin_data,
 				        get_image_interpolation(b_image_node),
-				        get_image_extension(b_image_node));
+				        get_image_extension(b_image_node),
+				        image->use_alpha);
 			}
 		}
 		image->color_space = (NodeImageColorSpace)b_image_node.color_space();
@@ -661,7 +664,8 @@ static ShaderNode *add_node(Scene *scene,
 			bool is_builtin = b_image.packed_file() ||
 			                  b_image.source() == BL::Image::source_GENERATED ||
 			                  b_image.source() == BL::Image::source_MOVIE ||
-			                  b_engine.is_preview();
+			                  (b_engine.is_preview() &&
+			                   b_image.source() != BL::Image::source_SEQUENCE);
 
 			if(is_builtin) {
 				int scene_frame = b_scene.frame_current();
@@ -686,7 +690,8 @@ static ShaderNode *add_node(Scene *scene,
 				        env->filename.string(),
 				        env->builtin_data,
 				        get_image_interpolation(b_env_node),
-				        EXTENSION_REPEAT);
+				        EXTENSION_REPEAT,
+				        env->use_alpha);
 			}
 		}
 		env->color_space = (NodeImageColorSpace)b_env_node.color_space();
@@ -823,7 +828,8 @@ static ShaderNode *add_node(Scene *scene,
 			        point_density->filename.string(),
 			        point_density->builtin_data,
 			        point_density->interpolation,
-			        EXTENSION_CLIP);
+			        EXTENSION_CLIP,
+			        true);
 		}
 		node = point_density;
 
@@ -1159,6 +1165,8 @@ void BlenderSync::sync_materials(bool update_all)
 	/* material loop */
 	BL::BlendData::materials_iterator b_mat;
 
+	TaskPool pool;
+
 	for(b_data.materials.begin(b_mat); b_mat != b_data.materials.end(); ++b_mat) {
 		Shader *shader;
 
@@ -1194,9 +1202,22 @@ void BlenderSync::sync_materials(bool update_all)
 			shader->displacement_method = (experimental) ? get_displacement_method(cmat) : DISPLACE_BUMP;
 
 			shader->set_graph(graph);
+
+			/* By simplifying the shader graph as soon as possible, some redundant shader nodes
+			 * might be removed which prevents loading unneccessary attributes later.
+			 *
+			 * However, since graph simplification also accounts for e.g. mix weight, this would
+			 * cause frequent expensive resyncs in interactive sessions, so for those sessions
+			 * optimization is only performed right before compiling. */
+			if(!preview) {
+				pool.push(function_bind(&ShaderGraph::simplify, shader->graph, scene));
+			}
+
 			shader->tag_update(scene);
 		}
 	}
+
+	pool.wait_work();
 }
 
 /* Sync World */
