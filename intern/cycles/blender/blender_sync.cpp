@@ -52,7 +52,6 @@ BlenderSync::BlenderSync(BL::RenderEngine& b_engine,
 : b_engine(b_engine),
   b_data(b_data),
   b_scene(b_scene),
-  b_color(get_color_management_ptr()),
   shader_map(&scene->shaders),
   object_map(&scene->objects),
   mesh_map(&scene->meshes),
@@ -268,23 +267,11 @@ void BlenderSync::sync_integrator()
 		}
 	}
 
-	int sampling_pattern = get_enum(cscene, "sampling_pattern");
-	switch(sampling_pattern) {
-		case 1: /* Dithered Sobol */
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = true;
-			break;
-		case 2: /* Correlated Multi-Jittered */
-			integrator->sampling_pattern = SAMPLING_PATTERN_CMJ;
-			integrator->use_dithered_sampling = false;
-			break;
-		case 0: /* Sobol */
-		default:
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = false;
-			break;
-	}
-	integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+	integrator->sampling_pattern = (SamplingPattern)get_enum(
+	        cscene,
+	        "sampling_pattern",
+	        SAMPLING_NUM_PATTERNS,
+	        SAMPLING_PATTERN_SOBOL);
 
 	integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
 	integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
@@ -382,19 +369,6 @@ void BlenderSync::sync_film()
 				break;
 		}
 	}
-
-	BL::ColorSpace xyz = b_color.get_by_role(COLOR_ROLE_XYZ);
-	float rgb_primaries[][3] = {{1.0f, 0.0f, 0.0f},
-	                            {0.0f, 1.0f, 0.0f},
-	                            {0.0f, 0.0f, 1.0f}};
-	float xyz_primaries[3][3];
-	xyz.transform_color(rgb_primaries[0], true, xyz_primaries[0]);
-	xyz.transform_color(rgb_primaries[1], true, xyz_primaries[1]);
-	xyz.transform_color(rgb_primaries[2], true, xyz_primaries[2]);
-	film->rgb_to_xyz = make_transform(xyz_primaries[0][0], xyz_primaries[1][0], xyz_primaries[2][0], 0.0f,
-	                                  xyz_primaries[0][1], xyz_primaries[1][1], xyz_primaries[2][1], 0.0f,
-	                                  xyz_primaries[0][2], xyz_primaries[1][2], xyz_primaries[2][2], 0.0f,
-	                                  0.0f, 0.0f, 0.0f, 1.0f);
 
 	if(film->modified(prevfilm))
 		film->tag_update(scene);
@@ -504,129 +478,6 @@ void BlenderSync::sync_images()
 		}
 		/* TODO(sergey): Free builtin images not used by any shader. */
 	}
-}
-
-/* Passes */
-static map<string, PassType> init_pass_mapping()
-{
-	map<string, PassType> mapping;
-
-#define MAP_PASS(BPASS, CPASS) mapping.insert(std::pair<string, PassType>(BPASS, CPASS));
-	/* NOTE: Keep in sync with defined names from DNA_scene_types.h */
-	MAP_PASS("Combined", PASS_COMBINED);
-	MAP_PASS("Depth", PASS_DEPTH);
-	MAP_PASS("Mist", PASS_MIST);
-	MAP_PASS("Normal", PASS_NORMAL);
-	MAP_PASS("IndexOB", PASS_OBJECT_ID);
-	MAP_PASS("UV", PASS_UV);
-	MAP_PASS("Vector", PASS_MOTION);
-	MAP_PASS("IndexMA", PASS_MATERIAL_ID);
-
-	MAP_PASS("DiffDir", PASS_DIFFUSE_DIRECT);
-	MAP_PASS("GlossDir", PASS_GLOSSY_DIRECT);
-	MAP_PASS("TransDir", PASS_TRANSMISSION_DIRECT);
-	MAP_PASS("SubsurfaceDir", PASS_SUBSURFACE_DIRECT);
-
-	MAP_PASS("DiffInd", PASS_DIFFUSE_INDIRECT);
-	MAP_PASS("GlossInd", PASS_GLOSSY_INDIRECT);
-	MAP_PASS("TransInd", PASS_TRANSMISSION_INDIRECT);
-	MAP_PASS("SubsurfaceInd", PASS_SUBSURFACE_INDIRECT);
-
-	MAP_PASS("DiffCol", PASS_DIFFUSE_COLOR);
-	MAP_PASS("GlossCol", PASS_GLOSSY_COLOR);
-	MAP_PASS("TransCol", PASS_TRANSMISSION_COLOR);
-	MAP_PASS("SubsurfaceCol", PASS_SUBSURFACE_COLOR);
-
-	MAP_PASS("Emit", PASS_EMISSION);
-	MAP_PASS("Env", PASS_BACKGROUND);
-	MAP_PASS("AO", PASS_AO);
-	MAP_PASS("Shadow", PASS_SHADOW);
-
-#ifdef __KERNEL_DEBUG__
-	MAP_PASS("Debug BVH Traversal Steps", PASS_BVH_TRAVERSED_NODES);
-	MAP_PASS("Debug BVH Traversed Instances", PASS_BVH_TRAVERSED_INSTANCES);
-	MAP_PASS("Debug BVH Intersections", PASS_BVH_INTERSECTIONS);
-	MAP_PASS("Debug Ray Bounces", PASS_RAY_BOUNCES);
-#endif
-#undef MAP_PASS
-
-	return mapping;
-}
-map<string, PassType> pass_mapping = init_pass_mapping();
-
-PassType BlenderSync::get_pass_type(BL::RenderPass& b_pass)
-{
-	string name = b_pass.passname();
-	if (pass_mapping.count(name)) {
-		return pass_mapping[name];
-	}
-
-	return PASS_NONE;
-}
-
-void BlenderSync::sync_film(BL::RenderLayer& b_rlay,
-	                        BL::SceneRenderLayer& b_srlay,
-	                        bool advanced_shading)
-{
-	PassSettings passes;
-
-	if(advanced_shading) {
-		/* loop over passes */
-		BL::RenderLayer::passes_iterator b_pass_iter;
-
-		for(b_rlay.passes.begin(b_pass_iter); b_pass_iter != b_rlay.passes.end(); ++b_pass_iter) {
-			BL::RenderPass b_pass(*b_pass_iter);
-			PassType pass_type = get_pass_type(b_pass);
-
-			if(pass_type == PASS_MOTION && scene->integrator->motion_blur)
-				continue;
-			if(pass_type != PASS_NONE)
-				passes.add(pass_type);
-		}
-
-		PointerRNA crp = RNA_pointer_get(&b_srlay.ptr, "cycles");
-#ifdef __KERNEL_DEBUG__
-		if(get_boolean(crp, "pass_debug_bvh_traversal_steps")) {
-			b_engine.add_pass(1, "Debug BVH Traversal Steps", b_srlay.name().c_str(), NULL, "X");
-			passes.add(PASS_BVH_TRAVERSAL_STEPS);
-		}
-		if(get_boolean(crp, "pass_debug_bvh_traversed_instances")) {
-			b_engine.add_pass(1, "Debug BVH Traversed Instances", b_srlay.name().c_str(), NULL, "X");
-			passes.add(PASS_BVH_TRAVERSED_INSTANCES);
-		}
-		if(get_boolean(crp, "pass_debug_ray_bounces")) {
-			b_engine.add_pass(1, "Debug Ray Bounces", b_srlay.name().c_str(), NULL, "X");
-			passes.add(PASS_RAY_BOUNCES);
-		}
-#endif
-
-		RNA_BEGIN(&crp, b_aov, "aovs") {
-			bool is_color = RNA_enum_get(&b_aov, "type");
-			string name = get_string(b_aov, "name");
-			AOV aov = {ustring(name), 9999, is_color};
-			passes.add(aov);
-			string passname = string_printf("AOV %s", name.c_str());
-			b_engine.add_pass(is_color? 3: 1, passname.c_str(), b_srlay.name().c_str(), NULL, is_color? "RGB": "X");
-		} RNA_END
-	}
-
-	scene->film->denoising_flags = 0;
-	if(!b_srlay.denoising_diffuse_direct()) scene->film->denoising_flags |= DENOISING_CLEAN_DIFFUSE_DIR;
-	if(!b_srlay.denoising_diffuse_indirect()) scene->film->denoising_flags |= DENOISING_CLEAN_DIFFUSE_IND;
-	if(!b_srlay.denoising_glossy_direct()) scene->film->denoising_flags |= DENOISING_CLEAN_GLOSSY_DIR;
-	if(!b_srlay.denoising_glossy_indirect()) scene->film->denoising_flags |= DENOISING_CLEAN_GLOSSY_IND;
-	if(!b_srlay.denoising_transmission_direct()) scene->film->denoising_flags |= DENOISING_CLEAN_TRANSMISSION_DIR;
-	if(!b_srlay.denoising_transmission_indirect()) scene->film->denoising_flags |= DENOISING_CLEAN_TRANSMISSION_IND;
-	if(!b_srlay.denoising_subsurface_direct()) scene->film->denoising_flags |= DENOISING_CLEAN_SUBSURFACE_DIR;
-	if(!b_srlay.denoising_subsurface_indirect()) scene->film->denoising_flags |= DENOISING_CLEAN_SUBSURFACE_IND;
-
-	passes.denoising_data_pass = b_srlay.use_denoising();
-	passes.denoising_clean_pass = (scene->film->denoising_flags & DENOISING_CLEAN_ALL_PASSES);
-	passes.denoising_split_pass = b_srlay.denoising_cross();
-
-	scene->film->pass_alpha_threshold = b_srlay.pass_alpha_threshold();
-	scene->film->tag_passes_update(scene, passes);
-	scene->film->tag_update(scene);
 }
 
 /* Scene Parameters */

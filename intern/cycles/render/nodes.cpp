@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "film.h"
 #include "image.h"
 #include "integrator.h"
 #include "nodes.h"
@@ -199,223 +198,6 @@ void TextureMapping::compile(OSLCompiler &compiler)
 		compiler.parameter("mapping", tfm);
 		compiler.parameter("use_mapping", 1);
 	}
-}
-
-/* UDIM Texture */
-
-NODE_DEFINE(UDIMTextureNode)
-{
-	NodeType* type = NodeType::add("udim_texture", create, NodeType::SHADER);
-
-	SOCKET_STRING(filename, "Filename", ustring(""));
-
-	static NodeEnum color_space_enum;
-	color_space_enum.insert("none", NODE_COLOR_SPACE_NONE);
-	color_space_enum.insert("color", NODE_COLOR_SPACE_COLOR);
-	SOCKET_ENUM(color_space, "Color Space", color_space_enum, NODE_COLOR_SPACE_COLOR);
-
-	SOCKET_BOOLEAN(use_alpha, "Use Alpha", true);
-
-	static NodeEnum interpolation_enum;
-	interpolation_enum.insert("closest", INTERPOLATION_CLOSEST);
-	interpolation_enum.insert("linear", INTERPOLATION_LINEAR);
-	interpolation_enum.insert("cubic", INTERPOLATION_CUBIC);
-	interpolation_enum.insert("smart", INTERPOLATION_SMART);
-	SOCKET_ENUM(interpolation, "Interpolation", interpolation_enum, INTERPOLATION_LINEAR);
-
-	static NodeEnum extension_enum;
-	extension_enum.insert("periodic", EXTENSION_REPEAT);
-	extension_enum.insert("clamp", EXTENSION_EXTEND);
-	extension_enum.insert("black", EXTENSION_CLIP);
-	SOCKET_ENUM(extension, "Extension", extension_enum, EXTENSION_REPEAT);
-
-	SOCKET_STRING(uv_map, "UV Map", ustring(""));
-
-	SOCKET_OUT_COLOR(color, "Color");
-	SOCKET_OUT_FLOAT(alpha, "Alpha");
-
-	return type;
-}
-
-UDIMTextureNode::UDIMTextureNode()
-: ShaderNode(node_type)
-{
-	image_manager = NULL;
-	special_type = SHADER_SPECIAL_TYPE_UDIM_SLOT;
-}
-
-UDIMTextureNode::~UDIMTextureNode()
-{
-	if(image_manager) {
-		foreach(ImageTile &tile, tiles) {
-			if(tile.used) {
-				image_manager->remove_image(tile.filename.string(),
-				                            NULL,
-				                            interpolation,
-				                            extension,
-				                            use_alpha);
-			}
-		}
-	}
-}
-
-ShaderNode *UDIMTextureNode::clone() const
-{
-	UDIMTextureNode *node = new UDIMTextureNode(*this);
-	node->image_manager = NULL;
-	node->tiles.clear();
-	node->columns = 0;
-	return node;
-}
-
-
-void UDIMTextureNode::attributes(Shader *shader, AttributeRequestSet *attributes)
-{
-	if(shader->has_surface) {
-		if(!output("Color")->links.empty() || !output("Alpha")->links.empty()) {
-			if(uv_map != "")
-				attributes->add(uv_map);
-			else
-				attributes->add(ATTR_STD_UV);
-		}
-	}
-
-	ShaderNode::attributes(shader, attributes);
-}
-
-int UDIMTextureNode::ImageTile::get_encoding(NodeImageColorSpace color_space) {
-	if(!used) {
-		return -1;
-	}
-	int srgb = (is_linear || color_space != NODE_COLOR_SPACE_COLOR)? 0: 1;
-	return (slot & ~(1 << 31)) | (srgb? (1 << 31) : 0);
-}
-
-void UDIMTextureNode::compile(SVMCompiler& compiler)
-{
-	ShaderOutput *color_out = output("Color");
-	ShaderOutput *alpha_out = output("Alpha");
-
-	int attr;
-	if(uv_map != "")
-		attr = compiler.attribute(uv_map);
-	else
-		attr = compiler.attribute(ATTR_STD_UV);
-
-	image_manager = compiler.image_manager;
-	if(tiles.size() == 0) {
-		string file = filename.string();
-
-		/* At most 10 columns are allowed. */
-		columns = 10;
-		vector<int> used_tiles(columns);
-		compiler.current_shader->get_uv_tiles(compiler.scene, uv_map, used_tiles, columns);
-
-		/* Find how many columns are actually used. */
-		columns = 0;
-		for(int i = 0; i < used_tiles.size(); i++) {
-			if(used_tiles[i]) {
-				columns = max(columns, i % 10);
-			}
-		}
-		columns++;
-
-		/* Determine file names and load the textures. */
-		for(int i = 0; i < used_tiles.size(); i++) {
-			/* Skip empty columns. */
-			int column = i % 10;
-			if(column >= columns) {
-				assert(used_tiles[i] == 0);
-				continue;
-			}
-
-			ImageTile tile;
-			if(used_tiles[i] == 0) {
-				tile.used = false;
-			}
-			else {
-				tile.used = true;
-				string tile_file = file;
-				string_replace(tile_file, "1001", string_printf("%04d", 1001 + i));
-				tile.slot = image_manager->add_image(tile_file,
-				                                     NULL,
-				                                     false,
-				                                     0,
-				                                     tile.is_float,
-				                                     tile.is_linear,
-				                                     interpolation,
-				                                     extension,
-				                                     use_alpha);
-				tile.filename = ustring(tile_file);
-			}
-			tiles.push_back(tile);
-		}
-		/* Fill tiles with invalid tiles until the rectangle is complete. */
-		int rows = (tiles.size() + columns - 1)/columns;
-		for(int i = tiles.size(); i < columns*rows; i++) {
-			ImageTile tile;
-			tile.used = false;
-			tiles.push_back(tile);
-		}
-	}
-
-	compiler.add_node(NODE_TEX_UDIM,
-		compiler.encode_uchar4(
-			compiler.stack_assign_if_linked(color_out),
-			compiler.stack_assign_if_linked(alpha_out),
-			columns,
-			tiles.size()/columns),
-		attr,
-		align_up(tiles.size(), 4)/4);
-
-	/* Encode all tiles into an integer, and ensure that they're a multiple
-	 * of 4 since SVM nodes are int4. */
-	vector<int> encoded(align_up(tiles.size(), 4));
-	for(int i = 0; i < tiles.size(); i++) {
-		if(tiles[i].used && tiles[i].slot) {
-			int srgb = (tiles[i].is_linear || color_space != NODE_COLOR_SPACE_COLOR)? 0: 1;
-			encoded[i] = (tiles[i].slot & ~(1 << 31)) | (srgb? (1 << 31) : 0);
-		}
-		else {
-			encoded[i] = -1;
-		}
-	}
-	for(int i = tiles.size(); i < encoded.size(); i++) {
-		encoded[i] = -1;
-	}
-
-	for(int i = 0; i < encoded.size(); i += 4) {
-		compiler.add_node(encoded[i], encoded[i+1], encoded[i+2], encoded[i+3]);
-	}
-}
-
-void UDIMTextureNode::compile(OSLCompiler& compiler)
-{
-	ShaderOutput *alpha_out = output("Alpha");
-
-	image_manager = compiler.image_manager;
-
-	ImageManager::ImageDataType type;
-	bool is_linear;
-	type = image_manager->get_image_metadata(filename.string(), NULL, is_linear);
-	bool is_float = (type == ImageManager::IMAGE_DATA_TYPE_FLOAT || type == ImageManager::IMAGE_DATA_TYPE_FLOAT4);
-
-	string file = filename.string();
-	string_replace(file, "1001", "<UDIM>");
-	compiler.parameter("filename", file.c_str());
-
-	compiler.parameter("uv_map", uv_map.c_str());
-
-	if(is_linear || color_space != NODE_COLOR_SPACE_COLOR)
-		compiler.parameter("color_space", "linear");
-	else
-		compiler.parameter("color_space", "sRGB");
-	compiler.parameter("is_float", is_float);
-	compiler.parameter("use_alpha", !alpha_out->links.empty());
-	compiler.parameter(this, "interpolation");
-	compiler.parameter(this, "extension");
-
-	compiler.add(this, "node_udim_texture");
 }
 
 /* Image Texture */
@@ -609,10 +391,10 @@ void ImageTextureNode::compile(OSLCompiler& compiler)
 		/* TODO(sergey): It's not so simple to pass custom attribute
 		 * to the texture() function in order to make builtin images
 		 * support more clear. So we use special file name which is
-		 * "@i<slot_number>" and check whether file name matches this
+		 * "@<slot_number>" and check whether file name matches this
 		 * mask in the OSLRenderServices::texture().
 		 */
-		compiler.parameter("filename", string_printf("@i%d", slot).c_str());
+		compiler.parameter("filename", string_printf("@%d", slot).c_str());
 	}
 	if(is_linear || color_space != NODE_COLOR_SPACE_COLOR)
 		compiler.parameter("color_space", "linear");
@@ -795,7 +577,7 @@ void EnvironmentTextureNode::compile(OSLCompiler& compiler)
 		compiler.parameter(this, "filename");
 	}
 	else {
-		compiler.parameter("filename", string_printf("@i%d", slot).c_str());
+		compiler.parameter("filename", string_printf("@%d", slot).c_str());
 	}
 	compiler.parameter(this, "projection");
 	if(is_linear || color_space != NODE_COLOR_SPACE_COLOR)
@@ -1180,77 +962,6 @@ void VoronoiTextureNode::compile(OSLCompiler& compiler)
 
 	compiler.parameter(this, "coloring");
 	compiler.add(this, "node_voronoi_texture");
-}
-
-/* IES Light */
-
-NODE_DEFINE(IESLightNode)
-{
-	NodeType* type = NodeType::add("ies_light", create, NodeType::SHADER);
-
-	SOCKET_STRING(filename, "Filename", ustring(""));
-
-	SOCKET_IN_FLOAT(strength, "Strength", 0.0f);
-	SOCKET_IN_VECTOR(vector, "Vector", make_float3(0.0f, 0.0f, 0.0f));
-
-	SOCKET_OUT_FLOAT(fac, "Fac");
-
-	return type;
-}
-
-IESLightNode::IESLightNode()
-: ShaderNode(node_type)
-{
-	image_manager = NULL;
-	slot = -1;
-}
-
-ShaderNode *IESLightNode::clone() const
-{
-	IESLightNode *node = new IESLightNode(*this);
-	node->image_manager = NULL;
-	node->slot = -1;
-	return node;
-}
-
-IESLightNode::~IESLightNode()
-{
-	if(image_manager)
-		image_manager->remove_ies(slot);
-}
-
-void IESLightNode::compile(SVMCompiler& compiler)
-{
-	image_manager = compiler.image_manager;
-	if(slot == -1) {
-		if(ies.empty())
-			slot = image_manager->add_ies_from_file(filename);
-		else
-			slot = image_manager->add_ies(ies);
-	}
-
-	ShaderInput *strength_in = input("Strength");
-	ShaderInput *vector_in = input("Vector");
-	ShaderOutput *fac_out = output("Fac");
-
-	if(vector_in->link) compiler.stack_assign(vector_in);
-	if(strength_in->link) compiler.stack_assign(strength_in);
-	compiler.stack_assign(fac_out);
-
-	compiler.add_node(NODE_IES, compiler.encode_uchar4(strength_in->stack_offset, vector_in->stack_offset, fac_out->stack_offset, 0), slot, __float_as_int(strength));
-}
-
-void IESLightNode::compile(OSLCompiler& compiler)
-{
-	image_manager = compiler.image_manager;
-	if(slot == -1) {
-		if(ies.empty())
-			slot = image_manager->add_ies_from_file(filename);
-		else
-			slot = image_manager->add_ies(ies);
-	}
-	compiler.parameter("slot", slot);
-	compiler.add(this, "node_ies_light");
 }
 
 /* Musgrave Texture */
@@ -1770,7 +1481,7 @@ void PointDensityTextureNode::compile(OSLCompiler& compiler)
 		}
 
 		if(slot != -1) {
-			compiler.parameter("filename", string_printf("@i%d", slot).c_str());
+			compiler.parameter("filename", string_printf("@%d", slot).c_str());
 		}
 		if(space == NODE_TEX_VOXEL_SPACE_WORLD) {
 			compiler.parameter("mapping", transform_transpose(tfm));
@@ -1882,7 +1593,7 @@ RGBToBWNode::RGBToBWNode()
 void RGBToBWNode::constant_fold(const ConstantFolder& folder)
 {
 	if(folder.all_inputs_constant()) {
-		folder.make_constant(folder.scene->film->color_to_gray(color));
+		folder.make_constant(linear_rgb_to_gray(color));
 	}
 }
 
@@ -1978,7 +1689,7 @@ void ConvertNode::constant_fold(const ConstantFolder& folder)
 			if(to == SocketType::FLOAT) {
 				if(from == SocketType::COLOR) {
 					/* color to float */
-					folder.make_constant(folder.scene->film->color_to_gray(value_color));
+					folder.make_constant(linear_rgb_to_gray(value_color));
 				}
 				else {
 					/* vector/point/normal to float */
@@ -2573,150 +2284,6 @@ void DiffuseBsdfNode::compile(SVMCompiler& compiler)
 void DiffuseBsdfNode::compile(OSLCompiler& compiler)
 {
 	compiler.add(this, "node_diffuse_bsdf");
-}
-
-/* Disney principled BSDF Closure */
-NODE_DEFINE(PrincipledBsdfNode)
-{
-	NodeType* type = NodeType::add("principled_bsdf", create, NodeType::SHADER);
-
-	static NodeEnum distribution_enum;
-	distribution_enum.insert("GGX", CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
-	distribution_enum.insert("Multiscatter GGX", CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
-	SOCKET_ENUM(distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
-	SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f, 0.8f, 0.8f));
-	SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f, 0.8f, 0.8f));
-	SOCKET_IN_FLOAT(metallic, "Metallic", 0.0f);
-	SOCKET_IN_FLOAT(subsurface, "Subsurface", 0.0f);
-	SOCKET_IN_VECTOR(subsurface_radius, "Subsurface Radius", make_float3(0.1f, 0.1f, 0.1f));
-	SOCKET_IN_FLOAT(specular, "Specular", 0.0f);
-	SOCKET_IN_FLOAT(roughness, "Roughness", 0.0f);
-	SOCKET_IN_FLOAT(specular_tint, "Specular Tint", 0.0f);
-	SOCKET_IN_FLOAT(anisotropic, "Anisotropic", 0.0f);
-	SOCKET_IN_FLOAT(sheen, "Sheen", 0.0f);
-	SOCKET_IN_FLOAT(sheen_tint, "Sheen Tint", 0.0f);
-	SOCKET_IN_FLOAT(clearcoat, "Clearcoat", 0.0f);
-	SOCKET_IN_FLOAT(clearcoat_gloss, "Clearcoat Gloss", 0.0f);
-	SOCKET_IN_FLOAT(ior, "IOR", 0.0f);
-	SOCKET_IN_FLOAT(transparency, "Transparency", 0.0f);
-	SOCKET_IN_FLOAT(refraction_roughness, "Refraction Roughness", 0.0f);
-	SOCKET_IN_FLOAT(anisotropic_rotation, "Anisotropic Rotation", 0.0f);
-	SOCKET_IN_NORMAL(normal, "Normal", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_NORMAL);
-	SOCKET_IN_NORMAL(clearcoat_normal, "Clearcoat Normal", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_NORMAL);
-	SOCKET_IN_NORMAL(tangent, "Tangent", make_float3(0.0f, 0.0f, 0.0f), SocketType::LINK_TANGENT);
-	SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
-
-	SOCKET_OUT_CLOSURE(BSDF, "BSDF");
-
-	return type;
-}
-
-PrincipledBsdfNode::PrincipledBsdfNode()
-	: ShaderNode(node_type)
-{
-	special_type = SHADER_SPECIAL_TYPE_CLOSURE;
-	closure = CLOSURE_BSDF_PRINCIPLED_ID;
-	distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
-	distribution_orig = NBUILTIN_CLOSURES;
-}
-
-void PrincipledBsdfNode::attributes(Shader *shader, AttributeRequestSet *attributes)
-{
-	if(shader->has_surface) {
-		ShaderInput *tangent_in = input("Tangent");
-
-		if(!tangent_in->link)
-			attributes->add(ATTR_STD_GENERATED);
-	}
-
-	ShaderNode::attributes(shader, attributes);
-}
-
-void PrincipledBsdfNode::compile(SVMCompiler& compiler, ShaderInput *p_metallic, ShaderInput *p_subsurface, ShaderInput *p_subsurface_radius,
-	ShaderInput *p_specular, ShaderInput *p_roughness, ShaderInput *p_specular_tint, ShaderInput *p_anisotropic,
-	ShaderInput *p_sheen, ShaderInput *p_sheen_tint, ShaderInput *p_clearcoat, ShaderInput *p_clearcoat_gloss,
-	ShaderInput *p_ior, ShaderInput *p_transparency, ShaderInput *p_anisotropic_rotation, ShaderInput *p_refraction_roughness)
-{
-	ShaderInput *base_color_in = input("Base Color");
-	ShaderInput *subsurface_color_in = input("Subsurface Color");
-	ShaderInput *normal_in = input("Normal");
-	ShaderInput *clearcoat_normal_in = input("Clearcoat Normal");
-	ShaderInput *tangent_in = input("Tangent");
-
-	float3 weight = make_float3(1.0f, 1.0f, 1.0f);
-
-	compiler.add_node(NODE_CLOSURE_SET_WEIGHT, weight);
-
-	int normal_offset = compiler.stack_assign_if_linked(normal_in);
-	int clearcoat_normal_offset = compiler.stack_assign_if_linked(clearcoat_normal_in);
-	int tangent_offset = compiler.stack_assign_if_linked(tangent_in);
-	int specular_offset = compiler.stack_assign(p_specular);
-	int roughness_offset = compiler.stack_assign(p_roughness);
-	int specular_tint_offset = compiler.stack_assign(p_specular_tint);
-	int anisotropic_offset = compiler.stack_assign(p_anisotropic);
-	int sheen_offset = compiler.stack_assign(p_sheen);
-	int sheen_tint_offset = compiler.stack_assign(p_sheen_tint);
-	int clearcoat_offset = compiler.stack_assign(p_clearcoat);
-	int clearcoat_gloss_offset = compiler.stack_assign(p_clearcoat_gloss);
-	int ior_offset = compiler.stack_assign(p_ior);
-	int transparency_offset = compiler.stack_assign(p_transparency);
-	int refraction_roughness_offset = compiler.stack_assign(p_refraction_roughness);
-	int anisotropic_rotation_offset = compiler.stack_assign(p_anisotropic_rotation);
-	int subsurface_radius_offset = compiler.stack_assign(p_subsurface_radius);
-
-	compiler.add_node(NODE_CLOSURE_BSDF,
-		compiler.encode_uchar4(closure,
-		compiler.stack_assign(p_metallic),
-		compiler.stack_assign(p_subsurface),
-		compiler.closure_mix_weight_offset()),
-		__float_as_int((p_metallic) ? get_float(p_metallic->socket_type) : 0.0f),
-		__float_as_int((p_subsurface) ? get_float(p_subsurface->socket_type) : 0.0f));
-
-	compiler.add_node(normal_offset, tangent_offset,
-		compiler.encode_uchar4(specular_offset, roughness_offset, specular_tint_offset, anisotropic_offset),
-		compiler.encode_uchar4(sheen_offset, sheen_tint_offset, clearcoat_offset, clearcoat_gloss_offset));
-
-	compiler.add_node(compiler.encode_uchar4(ior_offset, transparency_offset, anisotropic_rotation_offset, refraction_roughness_offset),
-		distribution, SVM_STACK_INVALID, SVM_STACK_INVALID);
-
-	float3 bc_default = get_float3(base_color_in->socket_type);
-
-	compiler.add_node(((base_color_in->link) ? compiler.stack_assign(base_color_in) : SVM_STACK_INVALID),
-		__float_as_int(bc_default.x), __float_as_int(bc_default.y), __float_as_int(bc_default.z));
-
-	compiler.add_node(clearcoat_normal_offset, subsurface_radius_offset, SVM_STACK_INVALID, SVM_STACK_INVALID);
-
-	float3 ss_default = get_float3(subsurface_color_in->socket_type);
-
-	compiler.add_node(((subsurface_color_in->link) ? compiler.stack_assign(subsurface_color_in) : SVM_STACK_INVALID),
-		__float_as_int(ss_default.x), __float_as_int(ss_default.y), __float_as_int(ss_default.z));
-}
-
-bool PrincipledBsdfNode::has_integrator_dependency()
-{
-	ShaderInput *roughness_input = input("Roughness");
-	return !roughness_input->link && roughness <= 1e-4f;
-}
-
-void PrincipledBsdfNode::compile(SVMCompiler& compiler)
-{
-	compile(compiler, input("Metallic"), input("Subsurface"), input("Subsurface Radius"), input("Specular"),
-		input("Roughness"), input("Specular Tint"), input("Anisotropic"), input("Sheen"), input("Sheen Tint"),
-		input("Clearcoat"), input("Clearcoat Gloss"), input("IOR"), input("Transparency"),
-		input("Anisotropic Rotation"), input("Refraction Roughness"));
-}
-
-void PrincipledBsdfNode::compile(OSLCompiler& compiler)
-{
-	compiler.parameter(this, "distribution");
-	compiler.add(this, "node_principled_bsdf");
-}
-
-bool PrincipledBsdfNode::has_bssrdf_bump()
-{
-	/* detect if anything is plugged into the normal input besides the default */
-	ShaderInput *normal_in = input("Normal");
-	return (normal_in->link && normal_in->link->parent->special_type != SHADER_SPECIAL_TYPE_GEOMETRY);
 }
 
 /* Translucent BSDF Closure */
@@ -5022,8 +4589,7 @@ BlackbodyNode::BlackbodyNode()
 void BlackbodyNode::constant_fold(const ConstantFolder& folder)
 {
 	if(folder.all_inputs_constant()) {
-		float3 val = folder.scene->film->rec709_to_scene_linear(svm_math_blackbody_color(temperature));
-		folder.make_constant(val);
+		folder.make_constant(svm_math_blackbody_color(temperature));
 	}
 }
 
@@ -5081,62 +4647,6 @@ void OutputNode::compile(OSLCompiler& compiler)
 		compiler.add(this, "node_output_volume");
 	else if(compiler.output_type() == SHADER_TYPE_DISPLACEMENT)
 		compiler.add(this, "node_output_displacement");
-}
-
-/* AOV Output */
-
-NODE_DEFINE(AOVOutputNode)
-{
-	NodeType* type = NodeType::add("aov_output", create, NodeType::SHADER);
-
-	SOCKET_IN_COLOR(color, "Color", make_float3(0.0f, 0.0f, 0.0f));
-	SOCKET_IN_FLOAT(value, "Value", 0.0f);
-
-	SOCKET_STRING(name, "AOV Name", ustring(""));
-
-	return type;
-}
-
-AOVOutputNode::AOVOutputNode()
-: ShaderNode(node_type)
-{
-	special_type = SHADER_SPECIAL_TYPE_AOV_OUTPUT;
-}
-
-void AOVOutputNode::compile(SVMCompiler& compiler)
-{
-	int dummy;
-	AOV *aov = compiler.film->passes.get_aov(name, dummy);
-
-	if(!aov) {
-		return;
-	}
-
-	if(aov->is_color) {
-		compiler.add_node(NODE_AOV_WRITE_FLOAT3, compiler.stack_assign(input("Color")), aov->index);
-	}
-	else {
-		compiler.add_node(NODE_AOV_WRITE_FLOAT, compiler.stack_assign(input("Value")), aov->index);
-	}
-}
-
-void AOVOutputNode::compile(OSLCompiler& compiler)
-{
-	int dummy;
-	AOV *aov = compiler.film->passes.get_aov(name, dummy);
-
-	if(!aov) {
-		return;
-	}
-
-	compiler.parameter("index", aov->index);
-
-	if(aov->is_color) {
-		compiler.add(this, "node_write_aov_float3");
-	}
-	else {
-		compiler.add(this, "node_write_aov_float");
-	}
 }
 
 /* Math */

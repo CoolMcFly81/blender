@@ -58,7 +58,6 @@ class CyclesRender(bpy.types.RenderEngine):
     bl_use_exclude_layers = True
     bl_use_save_buffers = True
     bl_use_spherical_stereo = True
-    bl_use_preview_save = True
 
     def __init__(self):
         self.session = None
@@ -102,9 +101,6 @@ class CyclesRender(bpy.types.RenderEngine):
             osl.update_script_node(node, self.report)
         else:
             self.report({'ERROR'}, "OSL support disabled in this build.")
-
-    def save_preview(self):
-        return engine.save_preview(self)
 
 
 def engine_exit():

@@ -304,8 +304,6 @@ public:
 
 #endif
 
-#define ALIGN_UP(offset, alignment) ((offset + alignment - 1) & ~(alignment - 1))
-
 #ifndef __KERNEL_GPU__
 
 /* Vector Type Constructors

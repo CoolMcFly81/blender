@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <memory>
 
+#include "util_debug.h"
 #include "util_types.h"
 
 #ifdef WITH_BLENDER_GUARDEDALLOC

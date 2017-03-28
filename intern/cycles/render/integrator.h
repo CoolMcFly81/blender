@@ -82,8 +82,6 @@ public:
 	Method method;
 
 	SamplingPattern sampling_pattern;
-	bool use_dithered_sampling;
-	float scrambling_distance;
 
 	bool need_update;
 

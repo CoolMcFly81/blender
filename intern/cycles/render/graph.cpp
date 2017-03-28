@@ -496,7 +496,7 @@ void ShaderGraph::remove_proxy_nodes()
  * Try to constant fold some nodes, and pipe result directly to
  * the input socket of connected nodes.
  */
-void ShaderGraph::constant_fold(Scene *scene)
+void ShaderGraph::constant_fold()
 {
 	ShaderNodeSet done, scheduled;
 	queue<ShaderNode*> traverse_queue;
@@ -536,7 +536,7 @@ void ShaderGraph::constant_fold(Scene *scene)
 				}
 			}
 			/* Optimize current node. */
-			ConstantFolder folder(this, node, output, scene);
+			ConstantFolder folder(this, node, output);
 			node->constant_fold(folder);
 		}
 	}
@@ -668,7 +668,7 @@ void ShaderGraph::clean(Scene *scene)
 	/* 1: Remove proxy nodes was already done. */
 
 	/* 2: Constant folding. */
-	constant_fold(scene);
+	constant_fold();
 
 	/* 3: Simplification. */
 	simplify_settings(scene);
@@ -685,11 +685,6 @@ void ShaderGraph::clean(Scene *scene)
 	
 	/* break cycles */
 	break_cycles(output(), visited, on_stack);
-	foreach(ShaderNode *node, nodes) {
-		if(node->special_type == SHADER_SPECIAL_TYPE_AOV_OUTPUT) {
-			break_cycles(node, visited, on_stack);
-		}
-	}
 
 	/* disconnect unused nodes */
 	foreach(ShaderNode *node, nodes) {
@@ -1001,9 +996,6 @@ int ShaderGraph::get_num_closures()
 		}
 		else if(CLOSURE_IS_BSDF_MULTISCATTER(closure_type)) {
 			num_closures += 2;
-		}
-		else if(CLOSURE_IS_PRINCIPLED(closure_type)) {
-			num_closures += 8;
 		}
 		else {
 			++num_closures;

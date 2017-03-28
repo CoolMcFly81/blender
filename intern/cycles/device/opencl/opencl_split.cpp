@@ -100,7 +100,7 @@ public:
 		else if(task->type == DeviceTask::SHADER) {
 			shader(*task);
 		}
-		else if(task->type == DeviceTask::RENDER) {
+		else if(task->type == DeviceTask::PATH_TRACE) {
 			RenderTile tile;
 
 			/* Copy dummy KernelGlobals related to OpenCL from kernel_globals.h to
@@ -123,39 +123,27 @@ public:
 
 			/* Keep rendering tiles until done. */
 			while(task->acquire_tile(this, tile)) {
-				if(tile.task == RenderTile::PATH_TRACE) {
-					assert(tile.task == RenderTile::PATH_TRACE);
-					split_kernel->path_trace(task,
-					                         tile,
-					                         kgbuffer,
-					                         *const_mem_map["__data"]);
+				split_kernel->path_trace(task,
+				                         tile,
+				                         kgbuffer,
+				                         *const_mem_map["__data"]);
 
-					/* Complete kernel execution before release tile. */
-					/* This helps in multi-device render;
-					 * The device that reaches the critical-section function
-					 * release_tile waits (stalling other devices from entering
-					 * release_tile) for all kernels to complete. If device1 (a
-					 * slow-render device) reaches release_tile first then it would
-					 * stall device2 (a fast-render device) from proceeding to render
-					 * next tile.
-					 */
-					clFinish(cqCommandQueue);
-				}
-				else if(tile.task == RenderTile::DENOISE) {
-					tile.sample = tile.start_sample + tile.num_samples;
-					denoise(tile, *task);
-					task->update_progress(&tile, tile.w*tile.h);
-				}
+				/* Complete kernel execution before release tile. */
+				/* This helps in multi-device render;
+				 * The device that reaches the critical-section function
+				 * release_tile waits (stalling other devices from entering
+				 * release_tile) for all kernels to complete. If device1 (a
+				 * slow-render device) reaches release_tile first then it would
+				 * stall device2 (a fast-render device) from proceeding to render
+				 * next tile.
+				 */
+				clFinish(cqCommandQueue);
 
 				task->release_tile(tile);
 			}
 
 			mem_free(kgbuffer);
 		}
-	}
-
-	bool is_split_kernel() {
-		return true;
 	}
 
 protected:
