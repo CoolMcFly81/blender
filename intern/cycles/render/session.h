@@ -57,6 +57,13 @@ public:
 
 	bool display_buffer_linear;
 
+	bool use_denoising;
+	int denoising_radius;
+	float denoising_pca_threshold;
+	float denoising_weight_adjust;
+	bool denoising_use_gradients;
+	bool denoising_use_cross;
+
 	double cancel_timeout;
 	double reset_timeout;
 	double text_timeout;
@@ -68,6 +75,7 @@ public:
 	{
 		background = false;
 		progressive_refine = false;
+
 		output_path = "";
 
 		progressive = false;
@@ -77,7 +85,15 @@ public:
 		start_resolution = INT_MAX;
 		threads = 0;
 
+		use_denoising = false;
+
 		display_buffer_linear = false;
+
+		denoising_radius = 8;
+		denoising_pca_threshold = 1e-3f;
+		denoising_weight_adjust = 0.5f;
+		denoising_use_gradients = false;
+		denoising_use_cross = false;
 
 		cancel_timeout = 0.1;
 		reset_timeout = 0.1;
@@ -99,6 +115,12 @@ public:
 		&& tile_size == params.tile_size
 		&& start_resolution == params.start_resolution
 		&& threads == params.threads
+		&& use_denoising == params.use_denoising
+		&& denoising_radius == params.denoising_radius
+		&& denoising_pca_threshold == params.denoising_pca_threshold
+		&& denoising_weight_adjust == params.denoising_weight_adjust
+		&& denoising_use_gradients == params.denoising_use_gradients
+		&& denoising_use_cross == params.denoising_use_cross
 		&& display_buffer_linear == params.display_buffer_linear
 		&& cancel_timeout == params.cancel_timeout
 		&& reset_timeout == params.reset_timeout
@@ -126,7 +148,7 @@ public:
 	Stats stats;
 
 	function<void(RenderTile&)> write_render_tile_cb;
-	function<void(RenderTile&)> update_render_tile_cb;
+	function<void(RenderTile&, bool)> update_render_tile_cb;
 
 	explicit Session(const SessionParams& params);
 	~Session();
@@ -149,6 +171,9 @@ public:
 	 * (for example, when rendering with unlimited samples). */
 	float get_progress();
 
+	thread_mutex buffers_mutex;
+	int buffers_sample;
+
 protected:
 	struct DelayedReset {
 		thread_mutex mutex;
@@ -162,7 +187,7 @@ protected:
 	void update_status_time(bool show_pause = false, bool show_done = false);
 
 	void tonemap(int sample);
-	void path_trace();
+	void render();
 	void reset_(BufferParams& params, int samples);
 
 	void run_cpu();
@@ -176,6 +201,9 @@ protected:
 	bool acquire_tile(Device *tile_device, RenderTile& tile);
 	void update_tile_sample(RenderTile& tile);
 	void release_tile(RenderTile& tile);
+
+	void get_neighbor_tiles(RenderTile *tiles, Device *tile_device);
+	void release_neighbor_tiles(RenderTile *tiles, Device *tile_device);
 
 	bool device_use_gl;
 
@@ -191,7 +219,6 @@ protected:
 	thread_condition_variable pause_cond;
 	thread_mutex pause_mutex;
 	thread_mutex tile_mutex;
-	thread_mutex buffers_mutex;
 	thread_mutex display_mutex;
 
 	bool kernels_loaded;
@@ -202,7 +229,7 @@ protected:
 	double last_update_time;
 	bool update_progressive_refine(bool cancel);
 
-	vector<RenderBuffers *> tile_buffers;
+	vector<RenderTile> tile_buffers;
 
 	DeviceRequestedFeatures get_requested_device_features();
 

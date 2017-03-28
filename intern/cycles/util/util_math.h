@@ -525,6 +525,11 @@ ccl_device_inline float3 operator+=(float3& a, const float3& b)
 	return a = a + b;
 }
 
+ccl_device_inline float3 operator-=(float3& a, const float3& b)
+{
+	return a = a - b;
+}
+
 ccl_device_inline float3 operator*=(float3& a, const float3& b)
 {
 	return a = a * b;
@@ -1065,6 +1070,21 @@ ccl_device_inline int2 operator*(const int2 &a, const int2 &b)
 	return make_int2(a.x * b.x, a.y * b.y);
 }
 
+ccl_device_inline int2 operator*(const int2 &a, int b)
+{
+	return make_int2(a.x * b, a.y * b);
+}
+
+ccl_device_inline int2 operator*=(int2& a, const int2& b)
+{
+	return a = a * b;
+}
+
+ccl_device_inline int2 operator*=(int2& a, const int& b)
+{
+	return a = a * b;
+}
+
 ccl_device_inline int2 operator/(const int2 &a, const int2 &b)
 {
 	return make_int2(a.x / b.x, a.y / b.y);
@@ -1188,6 +1208,15 @@ ccl_device_inline void print_int4(const char *label, const int4& a)
 	printf("%s: %d %d %d %d\n", label, a.x, a.y, a.z, a.w);
 }
 
+ccl_device_inline int4 load_int4(const int *v)
+{
+#ifdef __KERNEL_SSE__
+	return _mm_loadu_si128((__m128i*)v);
+#else
+	return make_int4(v[0], v[1], v[2], v[3]);
+#endif
+}
+
 #endif
 
 /* Int/Float conversion */
@@ -1259,6 +1288,12 @@ ccl_device_inline float triangle_area(const float3& v1, const float3& v2, const 
 }
 
 #endif
+
+/* Cubic interpolation between b and c, a and d are the previous and next point */
+ccl_device_inline float cubic_interp(float a, float b, float c, float d, float x)
+{
+	return (((-0.5f*a + 1.5f*b - 1.5f*c + 0.5f*d)*x + (a - 2.5f*b + 2.0f*c-0.5f*d))*x + (-0.5f*a+0.5f*c))*x + b;
+}
 
 /* Versions of functions which are safe for fast math. */
 ccl_device_inline bool isnan_safe(float f)
@@ -1516,6 +1551,19 @@ ccl_device_inline int util_max_axis(float3 vec)
 			return 2;
 	}
 #endif
+}
+
+ccl_device_inline float ensure_finite(float v)
+{
+	return isfinite_safe(v)? v : 0.0f;
+}
+
+ccl_device_inline float3 ensure_finite3(float3 v)
+{
+	if(!isfinite_safe(v.x)) v.x = 0.0;
+	if(!isfinite_safe(v.y)) v.y = 0.0;
+	if(!isfinite_safe(v.z)) v.z = 0.0;
+	return v;
 }
 
 CCL_NAMESPACE_END

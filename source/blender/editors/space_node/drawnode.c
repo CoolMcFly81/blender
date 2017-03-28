@@ -826,23 +826,38 @@ static void node_shader_buts_tex_image(uiLayout *layout, bContext *C, PointerRNA
 {
 	PointerRNA imaptr = RNA_pointer_get(ptr, "image");
 	PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
+	bool udim = RNA_boolean_get(ptr, "use_udim");
 
 	uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
 	uiTemplateID(layout, C, ptr, "image", NULL, "IMAGE_OT_open", NULL);
 	uiItemR(layout, ptr, "color_space", 0, "", ICON_NONE);
 	uiItemR(layout, ptr, "interpolation", 0, "", ICON_NONE);
-	uiItemR(layout, ptr, "projection", 0, "", ICON_NONE);
 
-	if (RNA_enum_get(ptr, "projection") == SHD_PROJ_BOX) {
-		uiItemR(layout, ptr, "projection_blend", 0, "Blend", ICON_NONE);
+	uiItemR(layout, ptr, "use_udim", 0, NULL, ICON_NONE);
+
+	if(!udim) {
+		uiItemR(layout, ptr, "projection", 0, "", ICON_NONE);
+
+		if (RNA_enum_get(ptr, "projection") == SHD_PROJ_BOX) {
+			uiItemR(layout, ptr, "projection_blend", 0, "Blend", ICON_NONE);
+		}
 	}
 
 	uiItemR(layout, ptr, "extension", 0, "", ICON_NONE);
 
-	/* note: image user properties used directly here, unlike compositor image node,
-	 * which redefines them in the node struct RNA to get proper updates.
-	 */
-	node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr);
+	if(udim) {
+		PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
+		if (obptr.data && RNA_enum_get(&obptr, "type") == OB_MESH) {
+			PointerRNA dataptr = RNA_pointer_get(&obptr, "data");
+			uiItemPointerR(layout, ptr, "uv_map", &dataptr, "uv_textures", "", ICON_NONE);
+		}
+	}
+	else {
+		/* note: image user properties used directly here, unlike compositor image node,
+		 * which redefines them in the node struct RNA to get proper updates.
+		 */
+		node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr);
+	}
 }
 
 static void node_shader_buts_tex_image_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -1092,6 +1107,26 @@ static void node_shader_buts_hair(uiLayout *layout, bContext *UNUSED(C), Pointer
 	uiItemR(layout, ptr, "component", 0, "", ICON_NONE);
 }
 
+static void node_shader_buts_ies(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+	uiLayout *row;
+
+	row = uiLayoutRow(layout, false);
+	uiItemR(row, ptr, "mode", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+
+	row = uiLayoutRow(layout, true);
+
+	if (RNA_enum_get(ptr, "mode") == NODE_IES_INTERNAL)
+		uiItemR(row, ptr, "ies", 0, "", ICON_NONE);
+	else
+		uiItemR(row, ptr, "filepath", 0, "", ICON_NONE);
+}
+
+static void node_shader_buts_aov_output(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+	uiItemR(layout, ptr, "aov", 0, "", ICON_NONE);
+}
+
 static void node_shader_buts_script(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
 	uiLayout *row;
@@ -1234,6 +1269,7 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 		case SH_NODE_BSDF_GLOSSY:
 		case SH_NODE_BSDF_GLASS:
 		case SH_NODE_BSDF_REFRACTION:
+		case SH_NODE_BSDF_PRINCIPLED:
 			ntype->draw_buttons = node_shader_buts_glossy;
 			break;
 		case SH_NODE_BSDF_ANISOTROPIC:
@@ -1260,6 +1296,12 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 			break;
 		case SH_NODE_OUTPUT_LINESTYLE:
 			ntype->draw_buttons = node_buts_output_linestyle;
+			break;
+		case SH_NODE_IESLIGHT:
+			ntype->draw_buttons = node_shader_buts_ies;
+			break;
+		case SH_NODE_AOV_OUTPUT:
+			ntype->draw_buttons = node_shader_buts_aov_output;
 			break;
 	}
 }
@@ -3068,6 +3110,7 @@ static void std_node_socket_draw(bContext *C, uiLayout *layout, PointerRNA *ptr,
 	bNode *node = node_ptr->data;
 	bNodeSocket *sock = ptr->data;
 	int type = sock->typeinfo->type;
+	bool connected_to_virtual = (sock->link && (sock->link->fromsock->flag & SOCK_VIRTUAL));
 	/*int subtype = sock->typeinfo->subtype;*/
 	
 	/* XXX not nice, eventually give this node its own socket type ... */
@@ -3075,8 +3118,8 @@ static void std_node_socket_draw(bContext *C, uiLayout *layout, PointerRNA *ptr,
 		node_file_output_socket_draw(C, layout, ptr, node_ptr);
 		return;
 	}
-	
-	if ((sock->in_out == SOCK_OUT) || (sock->flag & SOCK_IN_USE) || (sock->flag & SOCK_HIDE_VALUE)) {
+
+	if ((sock->in_out == SOCK_OUT) || ((sock->flag & SOCK_IN_USE) && !connected_to_virtual) || (sock->flag & SOCK_HIDE_VALUE)) {
 		node_socket_button_label(C, layout, ptr, node_ptr, text);
 		return;
 	}
@@ -3585,11 +3628,30 @@ void node_draw_link_straight(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 }
 #endif
 
+static bool node_link_types_valid(bNodeLink *link)
+{
+	eNodeSocketDatatype from, to;
+
+	if(!link->fromsock || !link->tosock)
+		return true;
+
+	from = link->fromsock->type;
+	to = link->tosock->type;
+
+	/* These two types can only be connected to another socket of the same type. */
+	if(from == SOCK_SHADER || to == SOCK_SHADER ||
+	   from == SOCK_STRING || to == SOCK_STRING)
+		return (from == to);
+
+	return true;
+}
+
 /* note; this is used for fake links in groups too */
 void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 {
 	bool do_shaded = false;
 	bool do_triple = false;
+	bool do_dashed = false;
 	int th_col1 = TH_WIRE_INNER, th_col2 = TH_WIRE_INNER, th_col3 = TH_WIRE;
 	
 	if (link->fromsock == NULL && link->tosock == NULL)
@@ -3606,8 +3668,11 @@ void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 			return;
 		if (link->fromsock->flag & SOCK_UNAVAIL)
 			return;
-		
-		if (link->flag & NODE_LINK_VALID) {
+
+		if ((link->fromsock->flag & SOCK_VIRTUAL) || (link->fromsock->flag & SOCK_VIRTUAL))
+			do_dashed = true;
+
+		if (link->flag & NODE_LINK_VALID && node_link_types_valid(link)) {
 			/* special indicated link, on drop-node */
 			if (link->flag & NODE_LINKFLAG_HILITE) {
 				th_col1 = th_col2 = TH_ACTIVE;
@@ -3626,8 +3691,10 @@ void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 			th_col1 = TH_REDALERT;
 		}
 	}
-	
+
+	if (do_dashed) setlinestyle(3);
 	node_draw_link_bezier(v2d, snode, link, th_col1, do_shaded, th_col2, do_triple, th_col3);
+	if (do_dashed) setlinestyle(0);
 //	node_draw_link_straight(v2d, snode, link, th_col1, do_shaded, th_col2, do_triple, th_col3);
 }
 

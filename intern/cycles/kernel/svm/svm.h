@@ -52,6 +52,11 @@ ccl_device_inline float3 stack_load_float3(float *stack, uint a)
 	return make_float3(stack[a+0], stack[a+1], stack[a+2]);
 }
 
+ccl_device_inline float3 stack_load_float3_default(float *stack, uint a, float3 value)
+{
+	return (a == (uint)SVM_STACK_INVALID)? value: stack_load_float3(stack, a);
+}
+
 ccl_device_inline void stack_store_float3(float *stack, uint a, float3 f)
 {
 	kernel_assert(a+2 < SVM_STACK_SIZE);
@@ -158,6 +163,7 @@ CCL_NAMESPACE_END
 #include "svm_camera.h"
 #include "svm_geometry.h"
 #include "svm_hsv.h"
+#include "svm_ies.h"
 #include "svm_image.h"
 #include "svm_gamma.h"
 #include "svm_brightness.h"
@@ -182,6 +188,7 @@ CCL_NAMESPACE_END
 #include "svm_vector_transform.h"
 #include "svm_voxel.h"
 #include "svm_bump.h"
+#include "svm_aov.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -189,7 +196,13 @@ CCL_NAMESPACE_BEGIN
 #define NODES_FEATURE(feature) ((__NODES_FEATURES__ & (feature)) != 0)
 
 /* Main Interpreter Loop */
-ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg, ShaderData *sd, ccl_addr_space PathState *state, ShaderType type, int path_flag)
+ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg,
+                                        ShaderData *sd,
+                                        ccl_addr_space PathState *state,
+                                        ShaderType type,
+                                        int path_flag,
+                                        ccl_global float *buffer,
+                                        int sample)
 {
 	float stack[SVM_STACK_SIZE];
 	int offset = sd->shader & SHADER_MASK;
@@ -239,7 +252,7 @@ ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg, ShaderData *sd, ccl_a
 				svm_node_geometry(kg, sd, stack, node.y, node.z);
 				break;
 			case NODE_CONVERT:
-				svm_node_convert(sd, stack, node.y, node.z, node.w);
+				svm_node_convert(kg, sd, stack, node.y, node.z, node.w);
 				break;
 			case NODE_TEX_COORD:
 				svm_node_tex_coord(kg, sd, path_flag, stack, node, &offset);
@@ -409,6 +422,9 @@ ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg, ShaderData *sd, ccl_a
 			case NODE_LIGHT_FALLOFF:
 				svm_node_light_falloff(sd, stack, node);
 				break;
+			case NODE_IES:
+				svm_node_ies(kg, sd, stack, node, &offset);
+				break;
 #  endif  /* __EXTRA_NODES__ */
 #endif  /* NODES_GROUP(NODE_GROUP_LEVEL_2) */
 
@@ -422,6 +438,9 @@ ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg, ShaderData *sd, ccl_a
 				break;
 			case NODE_NORMAL_MAP:
 				svm_node_normal_map(kg, sd, stack, node);
+				break;
+			case NODE_TEX_UDIM:
+				svm_node_tex_udim(kg, sd, stack, node, &offset);
 				break;
 #  ifdef __EXTRA_NODES__
 			case NODE_INVERT:
@@ -449,10 +468,21 @@ ccl_device_noinline void svm_eval_nodes(KernelGlobals *kg, ShaderData *sd, ccl_a
 				svm_node_wireframe(kg, sd, stack, node);
 				break;
 			case NODE_WAVELENGTH:
-				svm_node_wavelength(sd, stack, node.y, node.z);
+				svm_node_wavelength(kg, sd, stack, node.y, node.z);
 				break;
 			case NODE_BLACKBODY:
 				svm_node_blackbody(kg, sd, stack, node.y, node.z);
+				break;
+			case NODE_AOV_WRITE_FLOAT3:
+				svm_node_aov_write_float3(kg, state, stack, node.y, node.z, buffer, sample);
+				break;
+			case NODE_AOV_WRITE_FLOAT:
+				svm_node_aov_write_float(kg, state, stack, node.y, node.z, buffer, sample);
+				break;
+			case NODE_END_IF_NO_AOVS:
+				if(state->written_aovs == ~0) {
+					return;
+				}
 				break;
 #  endif  /* __EXTRA_NODES__ */
 #  if NODES_FEATURE(NODE_FEATURE_VOLUME)

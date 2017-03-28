@@ -210,7 +210,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 			}
 			else {
 				if (rr->renlay == NULL) return;
-				rectf = RE_RenderLayerGetPass(rr->renlay, SCE_PASS_COMBINED, viewname);
+				rectf = RE_RenderLayerGetPass(rr->renlay, RE_PASSNAME_COMBINED, viewname);
 			}
 		}
 		if (rectf == NULL) return;
@@ -878,7 +878,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	// store spare
 
 	/* ensure at least 1 area shows result */
-	sa = render_view_open(C, event->x, event->y, op->reports);
+	sa = render_view_open(C, event->x, event->y, op->reports, NULL);
 
 	jobflag = WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS;
 	

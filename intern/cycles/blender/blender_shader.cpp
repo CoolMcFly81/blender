@@ -519,6 +519,19 @@ static ShaderNode *add_node(Scene *scene,
 		}
 		node = hair;
 	}
+	else if(b_node.is_a(&RNA_ShaderNodeBsdfPrincipled)) {
+		BL::ShaderNodeBsdfPrincipled b_principled_node(b_node);
+		PrincipledBsdfNode *principled = new PrincipledBsdfNode();
+		switch (b_principled_node.distribution()) {
+			case BL::ShaderNodeBsdfPrincipled::distribution_GGX:
+				principled->distribution = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
+				break;
+			case BL::ShaderNodeBsdfPrincipled::distribution_MULTI_GGX:
+				principled->distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
+				break;
+		}
+		node = principled;
+	}
 	else if(b_node.is_a(&RNA_ShaderNodeBsdfTranslucent)) {
 		node = new TranslucentBsdfNode();
 	}
@@ -602,58 +615,82 @@ static ShaderNode *add_node(Scene *scene,
 		BL::ShaderNodeTexImage b_image_node(b_node);
 		BL::Image b_image(b_image_node.image());
 		BL::ImageUser b_image_user(b_image_node.image_user());
-		ImageTextureNode *image = new ImageTextureNode();
-		if(b_image) {
-			/* builtin images will use callback-based reading because
-			 * they could only be loaded correct from blender side
-			 */
-			bool is_builtin = b_image.packed_file() ||
-			                  b_image.source() == BL::Image::source_GENERATED ||
-			                  b_image.source() == BL::Image::source_MOVIE ||
-			                  (b_engine.is_preview() &&
-			                   b_image.source() != BL::Image::source_SEQUENCE);
 
-			if(is_builtin) {
-				/* for builtin images we're using image datablock name to find an image to
-				 * read pixels from later
-				 *
-				 * also store frame number as well, so there's no differences in handling
-				 * builtin names for packed images and movies
-				 */
-				int scene_frame = b_scene.frame_current();
-				int image_frame = image_user_frame_number(b_image_user,
-				                                          scene_frame);
-				image->filename = b_image.name() + "@" + string_printf("%d", image_frame);
-				image->builtin_data = b_image.ptr.data;
-			}
-			else {
-				image->filename = image_user_file_path(b_image_user,
-				                                       b_image,
-				                                       b_scene.frame_current());
-				image->builtin_data = NULL;
+		/* builtin images will use callback-based reading because
+		 * they could only be loaded correct from blender side
+		 */
+		bool is_builtin = b_image && (b_image.packed_file() ||
+		                  b_image.source() == BL::Image::source_GENERATED ||
+		                  b_image.source() == BL::Image::source_MOVIE ||
+		                  (b_engine.is_preview() &&
+		                   b_image.source() != BL::Image::source_SEQUENCE));
+
+		if(b_image_node.use_udim()) {
+			UDIMTextureNode *udim = new UDIMTextureNode();
+			if(b_image) {
+				if(is_builtin) {
+					udim->filename = "";
+				}
+				else {
+					udim->filename = image_user_file_path(b_image_user,
+					                                      b_image,
+					                                      b_scene.frame_current());
+				}
 			}
 
-			image->animated = b_image_node.image_user().use_auto_refresh();
-			image->use_alpha = b_image.use_alpha();
+			udim->use_alpha = b_image.use_alpha();
+			udim->color_space = (NodeImageColorSpace)b_image_node.color_space();
+			udim->interpolation = get_image_interpolation(b_image_node);
+			udim->extension = get_image_extension(b_image_node);
+			udim->uv_map = b_image_node.uv_map();
 
-			/* TODO(sergey): Does not work properly when we change builtin type. */
-			if(b_image.is_updated()) {
-				scene->image_manager->tag_reload_image(
-				        image->filename.string(),
-				        image->builtin_data,
-				        get_image_interpolation(b_image_node),
-				        get_image_extension(b_image_node),
-				        image->use_alpha);
-			}
+			node = udim;
 		}
-		image->color_space = (NodeImageColorSpace)b_image_node.color_space();
-		image->projection = (NodeImageProjection)b_image_node.projection();
-		image->interpolation = get_image_interpolation(b_image_node);
-		image->extension = get_image_extension(b_image_node);
-		image->projection_blend = b_image_node.projection_blend();
-		BL::TexMapping b_texture_mapping(b_image_node.texture_mapping());
-		get_tex_mapping(&image->tex_mapping, b_texture_mapping);
-		node = image;
+		else {
+			ImageTextureNode *image = new ImageTextureNode();
+			if(b_image) {
+				if(is_builtin) {
+					/* for builtin images we're using image datablock name to find an image to
+					 * read pixels from later
+					 *
+					 * also store frame number as well, so there's no differences in handling
+					 * builtin names for packed images and movies
+					 */
+					int scene_frame = b_scene.frame_current();
+					int image_frame = image_user_frame_number(b_image_user,
+				                                          scene_frame);
+					image->filename = b_image.name() + "@" + string_printf("%d", image_frame);
+					image->builtin_data = b_image.ptr.data;
+				}
+				else {
+					image->filename = image_user_file_path(b_image_user,
+					                                       b_image,
+					                                       b_scene.frame_current());
+					image->builtin_data = NULL;
+				}
+
+				image->animated = b_image_node.image_user().use_auto_refresh();
+				image->use_alpha = b_image.use_alpha();
+
+				/* TODO(sergey): Does not work properly when we change builtin type. */
+				if(b_image.is_updated()) {
+					scene->image_manager->tag_reload_image(
+					        image->filename.string(),
+					        image->builtin_data,
+					        get_image_interpolation(b_image_node),
+					        get_image_extension(b_image_node),
+					        image->use_alpha);
+				}
+			}
+			image->color_space = (NodeImageColorSpace)b_image_node.color_space();
+			image->projection = (NodeImageProjection)b_image_node.projection();
+			image->interpolation = get_image_interpolation(b_image_node);
+			image->extension = get_image_extension(b_image_node);
+			image->projection_blend = b_image_node.projection_blend();
+			BL::TexMapping b_texture_mapping(b_image_node.texture_mapping());
+			get_tex_mapping(&image->tex_mapping, b_texture_mapping);
+			node = image;
+		}
 	}
 	else if(b_node.is_a(&RNA_ShaderNodeTexEnvironment)) {
 		BL::ShaderNodeTexEnvironment b_env_node(b_node);
@@ -788,6 +825,13 @@ static ShaderNode *add_node(Scene *scene,
 		get_tex_mapping(&sky->tex_mapping, b_texture_mapping);
 		node = sky;
 	}
+	else if(b_node.is_a(&RNA_ShaderNodeIESLight)) {
+		BL::ShaderNodeIESLight b_ies_node(b_node);
+		IESLightNode *ies = new IESLightNode();
+		ies->filename = blender_absolute_path(b_data, b_ntree, b_ies_node.filepath());
+		ies->ies = get_text_content(b_ies_node.ies().ptr);
+		node = ies;
+	}
 	else if(b_node.is_a(&RNA_ShaderNodeNormalMap)) {
 		BL::ShaderNodeNormalMap b_normal_map_node(b_node);
 		NormalMapNode *nmap = new NormalMapNode();
@@ -809,6 +853,12 @@ static ShaderNode *add_node(Scene *scene,
 		uvm->attribute = b_uvmap_node.uv_map();
 		uvm->from_dupli = b_uvmap_node.from_dupli();
 		node = uvm;
+	}
+	else if(b_node.is_a(&RNA_ShaderNodeAOVOutput)) {
+		BL::ShaderNodeAOVOutput b_aovout_node(b_node);
+		AOVOutputNode *aov = new AOVOutputNode();
+		aov->name = ustring(b_aovout_node.aov());
+		node = aov;
 	}
 	else if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
 		BL::ShaderNodeTexPointDensity b_point_density_node(b_node);

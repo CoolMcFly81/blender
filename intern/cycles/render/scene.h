@@ -112,6 +112,10 @@ public:
 
 	/* integrator */
 	device_vector<uint> sobol_directions;
+	device_vector<float2> sobol_dither;
+
+	/* ies lights */
+	device_vector<float> ies_lights;
 
 	/* cpu images */
 	device_vector<uchar4> tex_byte4_image[TEX_NUM_BYTE4_CPU];

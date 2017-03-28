@@ -99,7 +99,7 @@ ccl_device_noinline void shader_setup_from_ray(KernelGlobals *kg,
 		
 		/* smooth normal */
 		if(sd->shader & SHADER_SMOOTH_NORMAL)
-			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
+			sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
 
 #ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -186,7 +186,7 @@ void shader_setup_from_subsurface(
 		sd->N = Ng;
 
 		if(sd->shader & SHADER_SMOOTH_NORMAL)
-			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
+			sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
 
 #  ifdef __DPDU__
 		/* dPdu/dPdv */
@@ -244,8 +244,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
                                                 const float3 I,
                                                 int shader, int object, int prim,
                                                 float u, float v, float t,
-                                                float time,
-                                                bool object_space,
+                                                float time, bool object_space,
                                                 int lamp)
 {
 	/* vectors */
@@ -300,7 +299,7 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals *kg,
 	if(sd->type & PRIMITIVE_TRIANGLE) {
 		/* smooth normal */
 		if(sd->shader & SHADER_SMOOTH_NORMAL) {
-			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
+			sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
 
 #ifdef __INSTANCING__
 			if(!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
@@ -863,8 +862,15 @@ ccl_device float3 shader_holdout_eval(KernelGlobals *kg, ShaderData *sd)
 
 /* Surface Evaluation */
 
-ccl_device void shader_eval_surface(KernelGlobals *kg, ShaderData *sd, RNG *rng,
-	ccl_addr_space PathState *state, float randb, int path_flag, ShaderContext ctx)
+ccl_device void shader_eval_surface(KernelGlobals *kg,
+                                    ShaderData *sd,
+                                    RNG *rng,
+                                    ccl_addr_space PathState *state,
+                                    float randb,
+                                    int path_flag,
+                                    ShaderContext ctx,
+                                    ccl_global float *buffer,
+                                    int sample)
 {
 	sd->num_closure = 0;
 	sd->num_closure_extra = 0;
@@ -877,7 +883,7 @@ ccl_device void shader_eval_surface(KernelGlobals *kg, ShaderData *sd, RNG *rng,
 #endif
 	{
 #ifdef __SVM__
-		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag, buffer, sample);
 #else
 		DiffuseBsdf *bsdf = (DiffuseBsdf*)bsdf_alloc(sd,
 		                                             sizeof(DiffuseBsdf),
@@ -894,8 +900,13 @@ ccl_device void shader_eval_surface(KernelGlobals *kg, ShaderData *sd, RNG *rng,
 
 /* Background Evaluation */
 
-ccl_device float3 shader_eval_background(KernelGlobals *kg, ShaderData *sd,
-	ccl_addr_space PathState *state, int path_flag, ShaderContext ctx)
+ccl_device float3 shader_eval_background(KernelGlobals *kg,
+                                         ShaderData *sd,
+                                         ccl_addr_space PathState *state,
+                                         int path_flag,
+                                         ShaderContext ctx,
+                                         ccl_global float *buffer,
+                                         int sample)
 {
 	sd->num_closure = 0;
 	sd->num_closure_extra = 0;
@@ -909,7 +920,7 @@ ccl_device float3 shader_eval_background(KernelGlobals *kg, ShaderData *sd,
 	else
 #endif
 	{
-		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag, buffer, sample);
 	}
 
 	float3 eval = make_float3(0.0f, 0.0f, 0.0f);
@@ -1078,7 +1089,7 @@ ccl_device_inline void shader_eval_volume(KernelGlobals *kg,
 		else
 #  endif
 		{
-			svm_eval_nodes(kg, sd, state, SHADER_TYPE_VOLUME, path_flag);
+			svm_eval_nodes(kg, sd, state, SHADER_TYPE_VOLUME, path_flag, NULL, 0);
 		}
 #endif
 
@@ -1106,7 +1117,7 @@ ccl_device void shader_eval_displacement(KernelGlobals *kg, ShaderData *sd, ccl_
 	else
 #  endif
 	{
-		svm_eval_nodes(kg, sd, state, SHADER_TYPE_DISPLACEMENT, 0);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_DISPLACEMENT, 0, NULL, 0);
 	}
 #endif
 }

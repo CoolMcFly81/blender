@@ -79,6 +79,8 @@ NODE_DEFINE(Integrator)
 	sampling_pattern_enum.insert("sobol", SAMPLING_PATTERN_SOBOL);
 	sampling_pattern_enum.insert("cmj", SAMPLING_PATTERN_CMJ);
 	SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
+	SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
+	SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
 
 	return type;
 }
@@ -149,7 +151,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	kintegrator->seed = hash_int(seed);
 
 	kintegrator->use_ambient_occlusion =
-		((Pass::contains(scene->film->passes, PASS_AO)) || dscene->data.background.ao_factor != 0.0f);
+		(scene->film->passes.contains(PASS_AO) || dscene->data.background.ao_factor != 0.0f);
 	
 	kintegrator->sample_clamp_direct = (sample_clamp_direct == 0.0f)? FLT_MAX: sample_clamp_direct*3.0f;
 	kintegrator->sample_clamp_indirect = (sample_clamp_indirect == 0.0f)? FLT_MAX: sample_clamp_indirect*3.0f;
@@ -174,6 +176,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	}
 
 	kintegrator->sampling_pattern = sampling_pattern;
+	kintegrator->scrambling_distance = scrambling_distance;
 	kintegrator->aa_samples = aa_samples;
 
 	if(light_sampling_threshold > 0.0f) {
@@ -206,6 +209,21 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
 	device->tex_alloc("__sobol_directions", dscene->sobol_directions);
 
+	/* Sobol dithering table */
+	if(use_dithered_sampling) {
+		int dither_size = sobol_dither_matrix_size();
+		float2 *dither_matrix = dscene->sobol_dither.resize(dither_size*dither_size);
+
+		sobol_generate_dither_matrix(dither_matrix);
+
+		device->tex_alloc("__sobol_dither", dscene->sobol_dither);
+
+		kintegrator->dither_size = dither_size;
+	}
+	else {
+		kintegrator->dither_size = 0;
+	}
+
 	/* Clamping. */
 	bool use_sample_clamp = (sample_clamp_direct != 0.0f ||
 	                         sample_clamp_indirect != 0.0f);
@@ -220,7 +238,9 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 void Integrator::device_free(Device *device, DeviceScene *dscene)
 {
 	device->tex_free(dscene->sobol_directions);
+	device->tex_free(dscene->sobol_dither);
 	dscene->sobol_directions.clear();
+	dscene->sobol_dither.clear();
 }
 
 bool Integrator::modified(const Integrator& integrator)

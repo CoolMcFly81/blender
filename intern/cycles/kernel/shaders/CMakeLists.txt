@@ -35,6 +35,7 @@ set(SRC_OSL
 	node_absorption_volume.osl
 	node_holdout.osl
 	node_hsv.osl
+	node_ies_light.osl
 	node_image_texture.osl
 	node_invert.osl
 	node_layer_weight.osl
@@ -68,6 +69,7 @@ set(SRC_OSL
 	node_toon_bsdf.osl
 	node_translucent_bsdf.osl
 	node_transparent_bsdf.osl
+	node_udim_texture.osl
 	node_value.osl
 	node_vector_curves.osl
 	node_vector_math.osl
@@ -81,6 +83,7 @@ set(SRC_OSL
 	node_wireframe.osl
 	node_hair_bsdf.osl
 	node_uv_map.osl
+	node_principled_bsdf.osl
 	node_rgb_to_bw.osl
 )
 

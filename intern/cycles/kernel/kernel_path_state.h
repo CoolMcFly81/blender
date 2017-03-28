@@ -23,7 +23,7 @@ ccl_device_inline void path_state_init(KernelGlobals *kg,
                                        int sample,
                                        ccl_addr_space Ray *ray)
 {
-	state->flag = PATH_RAY_CAMERA|PATH_RAY_MIS_SKIP;
+	state->flag = PATH_RAY_CAMERA|PATH_RAY_MIS_SKIP|PATH_RAY_STORE_SHADOW_INFO;
 
 	state->rng_offset = PRNG_BASE_NUM;
 	state->sample = sample;
@@ -35,11 +35,17 @@ ccl_device_inline void path_state_init(KernelGlobals *kg,
 	state->transmission_bounce = 0;
 	state->transparent_bounce = 0;
 
+#ifdef __DENOISING_FEATURES__
+	state->denoising_feature_weight = (kernel_data.film.pass_denoising_data)? 1.0f : 0.0f;
+#endif  /* __DENOISING_FEATURES__ */
+
 	state->min_ray_pdf = FLT_MAX;
 	state->ray_pdf = 0.0f;
 #ifdef __LAMP_MIS__
 	state->ray_t = 0.0f;
 #endif
+
+	state->written_aovs = 0;
 
 #ifdef __VOLUME__
 	state->volume_bounce = 0;

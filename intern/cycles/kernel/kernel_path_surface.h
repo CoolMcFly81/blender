@@ -50,7 +50,7 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
 			int num_samples = ceil_to_int(num_samples_adjust*light_select_num_samples(kg, i));
 			float num_samples_inv = num_samples_adjust/(num_samples*kernel_data.integrator.num_all_lights);
-			RNG lamp_rng = cmj_hash(*rng, i);
+			RNG lamp_rng = path_rng_hash(*rng, i);
 
 			for(int j = 0; j < num_samples; j++) {
 				float light_u, light_v;
@@ -70,10 +70,10 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
+							path_radiance_accum_light(L, state, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, is_lamp);
 						}
 						else {
-							path_radiance_accum_total_light(L, throughput*num_samples_inv, &L_light);
+							path_radiance_accum_total_light(L, state, throughput*num_samples_inv, &L_light);
 						}
 					}
 				}
@@ -107,10 +107,10 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
 						if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
+							path_radiance_accum_light(L, state, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, is_lamp);
 						}
 						else {
-							path_radiance_accum_total_light(L, throughput*num_samples_inv, &L_light);
+							path_radiance_accum_total_light(L, state, throughput*num_samples_inv, &L_light);
 						}
 					}
 				}
@@ -133,10 +133,10 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
 				if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 					/* accumulate */
-					path_radiance_accum_light(L, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, state->bounce, is_lamp);
+					path_radiance_accum_light(L, state, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, is_lamp);
 				}
 				else {
-					path_radiance_accum_total_light(L, throughput*num_samples_adjust, &L_light);
+					path_radiance_accum_total_light(L, state, throughput*num_samples_adjust, &L_light);
 				}
 			}
 		}
@@ -155,7 +155,8 @@ ccl_device bool kernel_branched_path_surface_bounce(
         ccl_addr_space float3 *throughput,
         ccl_addr_space PathState *state,
         PathRadiance *L,
-        Ray *ray)
+        Ray *ray,
+	float sum_sample_weight)
 {
 	/* sample BSDF */
 	float bsdf_pdf;
@@ -174,6 +175,10 @@ ccl_device bool kernel_branched_path_surface_bounce(
 
 	/* modify throughput */
 	path_radiance_bsdf_bounce(L, throughput, &bsdf_eval, bsdf_pdf, state->bounce, label);
+
+#ifdef __DENOISING_FEATURES__
+	state->denoising_feature_weight *= (sc->sample_weight / sum_sample_weight) * (1.0f / num_samples);
+#endif
 
 	/* modify path state */
 	path_state_next(kg, state, label);
@@ -257,10 +262,10 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, RNG 
 
 			if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 				/* accumulate */
-				path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
+				path_radiance_accum_light(L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
 			}
 			else {
-				path_radiance_accum_total_light(L, throughput, &L_light);
+				path_radiance_accum_total_light(L, state, throughput, &L_light);
 			}
 		}
 	}

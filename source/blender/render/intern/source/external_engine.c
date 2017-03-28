@@ -68,7 +68,7 @@
 static RenderEngineType internal_render_type = {
 	NULL, NULL,
 	"BLENDER_RENDER", N_("Blender Render"), RE_INTERNAL,
-	NULL, NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -77,7 +77,7 @@ static RenderEngineType internal_render_type = {
 static RenderEngineType internal_game_type = {
 	NULL, NULL,
 	"BLENDER_GAME", N_("Blender Game"), RE_INTERNAL | RE_GAME,
-	NULL, NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -189,16 +189,19 @@ RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, 
 	RenderResult *result;
 	rcti disprect;
 
-	/* ensure the coordinates are within the right limits */
-	CLAMP(x, 0, re->result->rectx);
-	CLAMP(y, 0, re->result->recty);
-	CLAMP(w, 0, re->result->rectx);
-	CLAMP(h, 0, re->result->recty);
 
-	if (x + w > re->result->rectx)
-		w = re->result->rectx - x;
-	if (y + h > re->result->recty)
-		h = re->result->recty - y;
+	if (re) {
+		/* ensure the coordinates are within the right limits */
+		CLAMP(x, 0, re->result->rectx);
+		CLAMP(y, 0, re->result->recty);
+		CLAMP(w, 0, re->result->rectx);
+		CLAMP(h, 0, re->result->recty);
+
+		if (x + w > re->result->rectx)
+			w = re->result->rectx - x;
+		if (y + h > re->result->recty)
+			h = re->result->recty - y;
+	}
 
 	/* allocate a render result */
 	disprect.xmin = x;
@@ -206,12 +209,17 @@ RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, 
 	disprect.ymin = y;
 	disprect.ymax = y + h;
 
+	if (!re)
+		return render_result_new_preview(&disprect);
+
 	result = render_result_new(re, &disprect, 0, RR_USE_MEM, layername, viewname);
 
 	/* todo: make this thread safe */
 
 	/* can be NULL if we CLAMP the width or height to 0 */
 	if (result) {
+		render_result_clone_passes(re, result, viewname);
+
 		RenderPart *pa;
 
 		/* Copy EXR tile settings, so pipeline knows whether this is a result
@@ -245,7 +253,18 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
 	}
 }
 
-void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel, int merge_results)
+void RE_engine_add_pass(RenderEngine *engine, int channels, const char *name, const char *layername, const char *viewname, const char *chan_id)
+{
+	Render *re = engine->re;
+
+	if (!re || !re->result) {
+		return;
+	}
+
+	render_result_add_pass(re->result, channels, name, layername, viewname, chan_id);
+}
+
+void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel, int highlight, int merge_results)
 {
 	Render *re = engine->re;
 
@@ -254,7 +273,7 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 	}
 
 	/* merge. on break, don't merge in result for preview renders, looks nicer */
-	if (!cancel) {
+	if (!highlight) {
 		/* for exr tile render, detect tiles that are done */
 		RenderPart *pa = get_part_from_result(re, result);
 
