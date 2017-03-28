@@ -24,6 +24,8 @@
 
 #include "kernel_globals.h"
 
+#include "kernel_color.h"
+
 #ifdef __OSL__
 #  include "osl_shader.h"
 #endif
@@ -47,6 +49,7 @@
 #include "bvh/bvh.h"
 
 #include "kernel_accumulate.h"
+#include "kernel_passes_write.h"
 #include "kernel_shader.h"
 #include "kernel_light.h"
 #include "kernel_passes.h"

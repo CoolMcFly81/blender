@@ -29,6 +29,7 @@ CCL_NAMESPACE_BEGIN
 
 class Device;
 class DeviceScene;
+class Film;
 class ImageManager;
 class Scene;
 class ShaderGraph;
@@ -98,7 +99,7 @@ public:
 		string full_report() const;
 	};
 
-	SVMCompiler(ShaderManager *shader_manager, ImageManager *image_manager);
+	SVMCompiler(ShaderManager *shader_manager, ImageManager *image_manager, Film *film);
 	void compile(Scene *scene,
 	             Shader *shader,
 	             vector<int4>& svm_nodes,
@@ -127,6 +128,9 @@ public:
 
 	ImageManager *image_manager;
 	ShaderManager *shader_manager;
+	Shader *current_shader;
+	Scene *scene;
+	Film *film;
 	bool background;
 
 protected:
@@ -195,6 +199,7 @@ protected:
 	                       ShaderNode *skip_node = NULL);
 	void generate_node(ShaderNode *node, ShaderNodeSet& done);
 	void generate_closure_node(ShaderNode *node, CompilerState *state);
+	void generate_aov_node(ShaderNode *node, CompilerState *state);
 	void generated_shared_closure_nodes(ShaderNode *root_node,
 	                                    ShaderNode *node,
 	                                    CompilerState *state,
@@ -212,7 +217,6 @@ protected:
 
 	vector<int4> current_svm_nodes;
 	ShaderType current_type;
-	Shader *current_shader;
 	ShaderGraph *current_graph;
 	Stack active_stack;
 	int max_stack_use;

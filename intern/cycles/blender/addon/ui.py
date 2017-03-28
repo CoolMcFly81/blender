@@ -204,7 +204,10 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "volume_samples", text="Volume")
 
         if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
-            layout.row().prop(cscene, "sampling_pattern", text="Pattern")
+            col = layout.row().column()
+            col.prop(cscene, "sampling_pattern", text="Pattern")
+            col.prop(cscene, "scrambling_distance")
+
 
         for rl in scene.render.layers:
             if rl.samples > 0:
@@ -434,6 +437,41 @@ class CyclesRender_PT_performance(CyclesButtonsPanel, Panel):
         row.active = not cscene.debug_use_spatial_splits
         row.prop(cscene, "debug_bvh_time_steps")
 
+class CyclesRender_AOV_add(bpy.types.Operator):
+    """Add an AOV pass"""
+    bl_idname="scenerenderlayer.aov_add"
+    bl_label="Add AOV"
+
+    def execute(self, context):
+        scene = context.scene
+        rd = scene.render
+        rl = rd.layers.active
+        crl = rl.cycles
+
+        crl.aovs.add()
+        return {'FINISHED'}
+
+class CyclesRender_AOV_delete(bpy.types.Operator):
+    """Delete an AOV pass"""
+    bl_idname="scenerenderlayer.aov_delete"
+    bl_label="Delete AOV"
+
+    def execute(self, context):
+        scene = context.scene
+        rd = scene.render
+        rl = rd.layers.active
+        crl = rl.cycles
+
+        crl.aovs.remove(crl.active_aov)
+        return {'FINISHED'}
+
+class CyclesAOVList(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        row = layout.row()
+        row.label("", icon='RENDER_RESULT')
+        split = row.split(percentage=0.65, align=True)
+        split.prop(item, "name", text="")
+        split.prop(item, "type", text="")
 
 class CyclesRender_PT_layer_options(CyclesButtonsPanel, Panel):
     bl_label = "Layer"
@@ -482,6 +520,7 @@ class CyclesRender_PT_layer_passes(CyclesButtonsPanel, Panel):
         scene = context.scene
         rd = scene.render
         rl = rd.layers.active
+        crl = rl.cycles
 
         split = layout.split()
 
@@ -528,8 +567,19 @@ class CyclesRender_PT_layer_passes(CyclesButtonsPanel, Panel):
         col.prop(rl, "use_pass_emit", text="Emission")
         col.prop(rl, "use_pass_environment")
 
-        if hasattr(rd, "debug_pass_type"):
-            layout.prop(rd, "debug_pass_type")
+        if bpy.app.debug_value == 256:
+          col = layout.column()
+          col.prop(crl, "pass_debug_bvh_traversal_steps")
+          col.prop(crl, "pass_debug_bvh_traversed_instances")
+          col.prop(crl, "pass_debug_ray_bounces")
+
+        layout.label("AOVs:")
+        crl = rl.cycles
+        row = layout.row()
+        row.template_list("CyclesAOVList", "", crl, "aovs", crl, "active_aov")
+        sub = row.column(align=True)
+        sub.operator("scenerenderlayer.aov_add", icon='ZOOMIN', text="")
+        sub.operator("scenerenderlayer.aov_delete", icon='ZOOMOUT', text="")
 
 
 class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
@@ -573,6 +623,45 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
             row = layout.row()
             row.label(text="Camera Suffix:")
             row.prop(rv, "camera_suffix", text="")
+
+
+class CyclesRender_PT_denoising(CyclesButtonsPanel, Panel):
+    bl_label = "Denoising"
+    bl_context = "render_layer"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        rl = rd.layers.active
+        self.layout.prop(rl, "use_denoising", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        rd = scene.render
+        rl = rd.layers.active
+
+        col = layout.column()
+
+        sub = col.column(align=True)
+        sub.prop(rl, "denoising_radius")
+        sub.prop(rl, "denoising_strength", slider=True)
+        sub.prop(rl, "denoising_weighting_adjust", slider=True)
+        sub.prop(rl, "denoising_gradients")
+        sub.prop(rl, "denoising_cross")
+
+        sub = col.column(align=True)
+        row = sub.row(align=True)
+        row.prop(rl, "denoising_diffuse_direct", toggle=True)
+        row.prop(rl, "denoising_glossy_direct", toggle=True)
+        row.prop(rl, "denoising_transmission_direct", toggle=True)
+        row.prop(rl, "denoising_subsurface_direct", toggle=True)
+        row = sub.row(align=True)
+        row.prop(rl, "denoising_diffuse_indirect", toggle=True)
+        row.prop(rl, "denoising_glossy_indirect", toggle=True)
+        row.prop(rl, "denoising_transmission_indirect", toggle=True)
+        row.prop(rl, "denoising_subsurface_indirect", toggle=True)
 
 
 class Cycles_PT_post_processing(CyclesButtonsPanel, Panel):
@@ -1654,6 +1743,7 @@ def draw_pause(self, context):
         if view.viewport_shade == 'RENDERED':
             cscene = scene.cycles
             layername = scene.render.layers.active.name
+            layout.operator("render.save_preview", icon="RENDER_RESULT", text="")
             layout.prop(cscene, "preview_pause", icon="PAUSE", text="")
             layout.prop(cscene, "preview_active_layer", icon="RENDERLAYERS", text=layername)
 
@@ -1729,6 +1819,7 @@ classes = (
     CyclesRender_PT_layer_options,
     CyclesRender_PT_layer_passes,
     CyclesRender_PT_views,
+    CyclesRender_PT_denoising,
     Cycles_PT_post_processing,
     CyclesCamera_PT_dof,
     Cycles_PT_context_material,
@@ -1760,6 +1851,9 @@ classes = (
     CyclesRender_PT_debug,
     CyclesParticle_PT_CurveSettings,
     CyclesScene_PT_simplify,
+    CyclesAOVList,
+    CyclesRender_AOV_add,
+    CyclesRender_AOV_delete,
 )
 
 

@@ -38,17 +38,56 @@ typedef enum FilterType {
 	FILTER_NUM_TYPES,
 } FilterType;
 
-class Pass {
+template<typename T>
+bool operator==(const array<T>& A, const array<T>& B)
+{
+	if(A.size() != B.size())
+		return false;
+
+	for(int i = 0; i < A.size(); i++)
+		if(A[i].type != B[i].type)
+			return false;
+}
+
+struct Pass {
 public:
 	PassType type;
 	int components;
 	bool filter;
 	bool exposure;
 	PassType divide_type;
+	bool is_virtual;
+};
 
-	static void add(PassType type, array<Pass>& passes);
-	static bool equals(const array<Pass>& A, const array<Pass>& B);
-	static bool contains(const array<Pass>& passes, PassType);
+struct AOV {
+public:
+	ustring name;
+	int index;
+	bool is_color;
+};
+
+class PassSettings {
+public:
+	PassSettings();
+	bool modified(const PassSettings& other) const;
+
+	int get_size() const;
+	int get_denoising_offset() const;
+	Pass* get_pass(PassType type, int &offset);
+	AOV* get_aov(ustring name, int &offset);
+
+	bool contains(PassType type) const;
+	void add(PassType type);
+	void add(AOV aov);
+
+	bool denoising_data_pass;
+	bool denoising_clean_pass;
+	bool denoising_split_pass;
+protected:
+	array<Pass> passes;
+	array<AOV> aovs;
+
+	friend class Film;
 };
 
 class Film : public Node {
@@ -56,8 +95,17 @@ public:
 	NODE_DECLARE
 
 	float exposure;
-	array<Pass> passes;
+	int denoising_flags;
+
+	PassSettings passes;
+
 	float pass_alpha_threshold;
+
+	Transform rgb_to_xyz;
+
+	int pass_stride;
+	int denoising_data_offset;
+	int denoising_clean_offset;
 
 	FilterType filter_type;
 	float filter_width;
@@ -78,9 +126,13 @@ public:
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_free(Device *device, DeviceScene *dscene, Scene *scene);
 
+	float color_to_gray(float3 color);
+	float3 rec709_to_scene_linear(float3 color);
+
 	bool modified(const Film& film);
-	void tag_passes_update(Scene *scene, const array<Pass>& passes_);
+	void tag_passes_update(Scene *scene, const PassSettings& passes);
 	void tag_update(Scene *scene);
+
 };
 
 CCL_NAMESPACE_END

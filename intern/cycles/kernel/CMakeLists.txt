@@ -13,7 +13,17 @@ set(INC_SYS
 
 set(SRC
 	kernels/cpu/kernel.cpp
+	kernels/cpu/kernel_sse2.cpp
+	kernels/cpu/kernel_sse3.cpp
+	kernels/cpu/kernel_sse41.cpp
+	kernels/cpu/kernel_avx.cpp
+	kernels/cpu/kernel_avx2.cpp
 	kernels/cpu/kernel_split.cpp
+	kernels/cpu/kernel_split_sse2.cpp
+	kernels/cpu/kernel_split_sse3.cpp
+	kernels/cpu/kernel_split_sse41.cpp
+	kernels/cpu/kernel_split_avx.cpp
+	kernels/cpu/kernel_split_avx2.cpp
 	kernels/opencl/kernel.cl
 	kernels/opencl/kernel_state_buffer_size.cl
 	kernels/opencl/kernel_split.cl
@@ -58,6 +68,7 @@ set(SRC_HEADERS
 	kernel_accumulate.h
 	kernel_bake.h
 	kernel_camera.h
+	kernel_color.h
 	kernel_compat_cpu.h
 	kernel_compat_cuda.h
 	kernel_compat_opencl.h
@@ -72,6 +83,7 @@ set(SRC_HEADERS
 	kernel_math.h
 	kernel_montecarlo.h
 	kernel_passes.h
+	kernel_passes_write.h
 	kernel_path.h
 	kernel_path_branched.h
 	kernel_path_common.h
@@ -123,11 +135,14 @@ set(SRC_CLOSURE_HEADERS
 	closure/bssrdf.h
 	closure/emissive.h
 	closure/volume.h
+	closure/bsdf_principled_diffuse.h
+	closure/bsdf_principled_sheen.h
 )
 
 set(SRC_SVM_HEADERS
 	svm/svm.h
 	svm/svm_attribute.h
+	svm/svm_aov.h
 	svm/svm_blackbody.h
 	svm/svm_bump.h
 	svm/svm_camera.h
@@ -145,6 +160,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_geometry.h
 	svm/svm_gradient.h
 	svm/svm_hsv.h
+	svm/svm_ies.h
 	svm/svm_image.h
 	svm/svm_invert.h
 	svm/svm_light_path.h
@@ -197,6 +213,7 @@ set(SRC_UTIL_HEADERS
 	../util/util_math.h
 	../util/util_math_fast.h
 	../util/util_math_intersect.h
+	../util/util_math_matrix.h
 	../util/util_static_assert.h
 	../util/util_transform.h
 	../util/util_texture.h
@@ -352,15 +369,6 @@ include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})
 
 if(CXX_HAS_SSE)
-	list(APPEND SRC
-		kernels/cpu/kernel_sse2.cpp
-		kernels/cpu/kernel_sse3.cpp
-		kernels/cpu/kernel_sse41.cpp
-		kernels/cpu/kernel_split_sse2.cpp
-		kernels/cpu/kernel_split_sse3.cpp
-		kernels/cpu/kernel_split_sse41.cpp
-	)
-
 	set_source_files_properties(kernels/cpu/kernel_sse2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE2_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_sse3.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE3_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_sse41.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE41_KERNEL_FLAGS}")
@@ -370,19 +378,11 @@ if(CXX_HAS_SSE)
 endif()
 
 if(CXX_HAS_AVX)
-	list(APPEND SRC
-		kernels/cpu/kernel_avx.cpp
-		kernels/cpu/kernel_split_avx.cpp
-	)
 	set_source_files_properties(kernels/cpu/kernel_avx.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_split_avx.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX_KERNEL_FLAGS}")
 endif()
 
 if(CXX_HAS_AVX2)
-	list(APPEND SRC
-		kernels/cpu/kernel_avx2.cpp
-		kernels/cpu/kernel_split_avx2.cpp
-	)
 	set_source_files_properties(kernels/cpu/kernel_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
 	set_source_files_properties(kernels/cpu/kernel_split_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
 endif()

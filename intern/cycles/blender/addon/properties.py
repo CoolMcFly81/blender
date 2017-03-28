@@ -104,6 +104,7 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
+    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
     )
 
@@ -138,6 +139,11 @@ enum_texture_limit = (
     ('2048', "2048", "Limit texture size to 2048 pixels", 5),
     ('4096', "4096", "Limit texture size to 4096 pixels", 6),
     ('8192', "8192", "Limit texture size to 8192 pixels", 7),
+    )
+
+enum_aov_types = (
+    ('VALUE', "Value", "Write a Value pass", 0),
+    ('COLOR', "Color", "Write a color pass", 1),
     )
 
 class CyclesRenderSettings(bpy.types.PropertyGroup):
@@ -263,6 +269,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 description="Random sampling pattern used by the integrator",
                 items=enum_sampling_pattern,
                 default='SOBOL',
+                )
+
+        cls.scrambling_distance = FloatProperty(
+                name="Scrambling distance",
+                description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+                            "lower values might speed up rendering but can cause visible artifacts",
+                min=0.0, max=1.0,
+                default=1.0,
                 )
 
         cls.use_layer_samples = EnumProperty(
@@ -1167,6 +1181,44 @@ class CyclesCurveRenderSettings(bpy.types.PropertyGroup):
         del bpy.types.Scene.cycles_curves
 
 
+class CyclesAOVSettings(bpy.types.PropertyGroup):
+    @classmethod
+    def register(cls):
+        cls.name = StringProperty(name="Name")
+        cls.type = EnumProperty(name="Type", items=enum_aov_types, default='COLOR')
+
+
+class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
+    @classmethod
+    def register(cls):
+        bpy.types.SceneRenderLayer.cycles = PointerProperty(
+                name="Cycles SceneRenderLayer Settings",
+                description="Cycles SceneRenderLayer Settings",
+                type=cls,
+                )
+        cls.pass_debug_bvh_traversal_steps = BoolProperty(
+                name="Debug BVH Traversal Steps",
+                description="Store Debug BVH Traversal Steps pass",
+                default=False,
+                )
+        cls.pass_debug_bvh_traversed_instances = BoolProperty(
+                name="Debug BVH Traversed Instances",
+                description="Store Debug BVH Traversed Instances pass",
+                default=False,
+                )
+        cls.pass_debug_ray_bounces = BoolProperty(
+                name="Debug Ray Bounces",
+                description="Store Debug Ray Bounces pass",
+                default=False,
+                )
+        cls.aovs = bpy.props.CollectionProperty(type=CyclesAOVSettings)
+        cls.active_aov = IntProperty(default=0)
+
+    @classmethod
+    def unregister(cls):
+        del bpy.types.SceneRenderLayer.cycles
+
+
 class CyclesCurveSettings(bpy.types.PropertyGroup):
     @classmethod
     def register(cls):
@@ -1312,6 +1364,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
 
 
 def register():
+    bpy.utils.register_class(CyclesAOVSettings)
     bpy.utils.register_class(CyclesRenderSettings)
     bpy.utils.register_class(CyclesCameraSettings)
     bpy.utils.register_class(CyclesMaterialSettings)
@@ -1324,9 +1377,11 @@ def register():
     bpy.utils.register_class(CyclesCurveSettings)
     bpy.utils.register_class(CyclesDeviceSettings)
     bpy.utils.register_class(CyclesPreferences)
+    bpy.utils.register_class(CyclesRenderLayerSettings)
 
 
 def unregister():
+    bpy.utils.unregister_class(CyclesAOVSettings)
     bpy.utils.unregister_class(CyclesRenderSettings)
     bpy.utils.unregister_class(CyclesCameraSettings)
     bpy.utils.unregister_class(CyclesMaterialSettings)
@@ -1339,3 +1394,4 @@ def unregister():
     bpy.utils.unregister_class(CyclesCurveSettings)
     bpy.utils.unregister_class(CyclesDeviceSettings)
     bpy.utils.unregister_class(CyclesPreferences)
+    bpy.utils.unregister_class(CyclesRenderLayerSettings)

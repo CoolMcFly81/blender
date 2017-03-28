@@ -70,7 +70,9 @@ enum ShaderNodeSpecialType {
 	SHADER_SPECIAL_TYPE_CLOSURE,
 	SHADER_SPECIAL_TYPE_COMBINE_CLOSURE,
 	SHADER_SPECIAL_TYPE_OUTPUT,
+	SHADER_SPECIAL_TYPE_AOV_OUTPUT,
 	SHADER_SPECIAL_TYPE_BUMP,
+	SHADER_SPECIAL_TYPE_UDIM_SLOT,
 };
 
 /* Input
@@ -281,7 +283,7 @@ protected:
 
 	/* Graph simplification routines. */
 	void clean(Scene *scene);
-	void constant_fold();
+	void constant_fold(Scene *scene);
 	void simplify_settings(Scene *scene);
 	void deduplicate_nodes();
 };

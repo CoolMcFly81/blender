@@ -74,6 +74,7 @@
 
 /* ** list of all supported color spaces, displays and views */
 static char global_role_scene_linear[MAX_COLORSPACE_NAME];
+static char global_role_xyz[MAX_COLORSPACE_NAME];
 static char global_role_color_picking[MAX_COLORSPACE_NAME];
 static char global_role_texture_painting[MAX_COLORSPACE_NAME];
 static char global_role_default_byte[MAX_COLORSPACE_NAME];
@@ -105,6 +106,8 @@ static pthread_mutex_t processor_lock = BLI_MUTEX_INITIALIZER;
 typedef struct ColormanageProcessor {
 	OCIO_ConstProcessorRcPtr *processor;
 	CurveMapping *curve_mapping;
+	float white_inv_sqr;
+	float gain;
 	bool is_data_result;
 } ColormanageProcessor;
 
@@ -123,6 +126,7 @@ static struct global_glsl_state {
 	bool use_curve_mapping;
 	int curve_mapping_timestamp;
 	OCIO_CurveMappingSettings curve_mapping_settings;
+	float white_value;
 
 	/* Container for GLSL state needed for OCIO module. */
 	struct OCIO_GLSLDrawState *ocio_glsl_state;
@@ -203,6 +207,7 @@ typedef struct ColormanageCacheViewSettings {
 	float gamma;
 	float dither;
 	CurveMapping *curve_mapping;
+	float white_value;
 } ColormanageCacheViewSettings;
 
 typedef struct ColormanageCacheDisplaySettings {
@@ -214,7 +219,7 @@ typedef struct ColormanageCacheKey {
 	int display;         /* display device name */
 } ColormanageCacheKey;
 
-typedef struct ColormnaageCacheData {
+typedef struct ColormanageCacheData {
 	int flag;        /* view flags of cached buffer */
 	int look;        /* Additional artistics transform */
 	float exposure;  /* exposure value cached buffer is calculated with */
@@ -222,12 +227,13 @@ typedef struct ColormnaageCacheData {
 	float dither;    /* dither value cached buffer is calculated with */
 	CurveMapping *curve_mapping;  /* curve mapping used for cached buffer */
 	int curve_mapping_timestamp;  /* time stamp of curve mapping used for cached buffer */
-} ColormnaageCacheData;
+	float white_value;    /* white value the cached buffer is calculated with */
+} ColormanageCacheData;
 
 typedef struct ColormanageCache {
 	struct MovieCache *moviecache;
 
-	ColormnaageCacheData *data;
+	ColormanageCacheData *data;
 } ColormanageCache;
 
 static struct MovieCache *colormanage_moviecache_get(const ImBuf *ibuf)
@@ -238,7 +244,7 @@ static struct MovieCache *colormanage_moviecache_get(const ImBuf *ibuf)
 	return ibuf->colormanage_cache->moviecache;
 }
 
-static ColormnaageCacheData *colormanage_cachedata_get(const ImBuf *ibuf)
+static ColormanageCacheData *colormanage_cachedata_get(const ImBuf *ibuf)
 {
 	if (!ibuf->colormanage_cache)
 		return NULL;
@@ -281,7 +287,7 @@ static struct MovieCache *colormanage_moviecache_ensure(ImBuf *ibuf)
 	return ibuf->colormanage_cache->moviecache;
 }
 
-static void colormanage_cachedata_set(ImBuf *ibuf, ColormnaageCacheData *data)
+static void colormanage_cachedata_set(ImBuf *ibuf, ColormanageCacheData *data)
 {
 	if (!ibuf->colormanage_cache)
 		ibuf->colormanage_cache = MEM_callocN(sizeof(ColormanageCache), "imbuf colormanage cache");
@@ -301,6 +307,7 @@ static void colormanage_view_settings_to_cache(ImBuf *ibuf,
 	cache_view_settings->exposure = view_settings->exposure;
 	cache_view_settings->gamma = view_settings->gamma;
 	cache_view_settings->dither = ibuf->dither;
+	cache_view_settings->white_value = view_settings->white_value;
 	cache_view_settings->flag = view_settings->flag;
 	cache_view_settings->curve_mapping = view_settings->curve_mapping;
 }
@@ -361,7 +368,7 @@ static unsigned char *colormanage_cache_get(ImBuf *ibuf, const ColormanageCacheV
 	cache_ibuf = colormanage_cache_get_ibuf(ibuf, &key, cache_handle);
 
 	if (cache_ibuf) {
-		ColormnaageCacheData *cache_data;
+		ColormanageCacheData *cache_data;
 
 		BLI_assert(cache_ibuf->x == ibuf->x &&
 		           cache_ibuf->y == ibuf->y);
@@ -379,6 +386,7 @@ static unsigned char *colormanage_cache_get(ImBuf *ibuf, const ColormanageCacheV
 		    cache_data->exposure != view_settings->exposure ||
 		    cache_data->gamma != view_settings->gamma ||
 		    cache_data->dither != view_settings->dither ||
+			cache_data->white_value != view_settings->white_value ||
 		    cache_data->flag != view_settings->flag ||
 		    cache_data->curve_mapping != curve_mapping ||
 		    cache_data->curve_mapping_timestamp != curve_mapping_timestamp)
@@ -402,7 +410,7 @@ static void colormanage_cache_put(ImBuf *ibuf, const ColormanageCacheViewSetting
 {
 	ColormanageCacheKey key;
 	ImBuf *cache_ibuf;
-	ColormnaageCacheData *cache_data;
+	ColormanageCacheData *cache_data;
 	int view_flag = 1 << (view_settings->view - 1);
 	struct MovieCache *moviecache = colormanage_moviecache_ensure(ibuf);
 	CurveMapping *curve_mapping = view_settings->curve_mapping;
@@ -421,11 +429,12 @@ static void colormanage_cache_put(ImBuf *ibuf, const ColormanageCacheViewSetting
 	cache_ibuf->flags |= IB_rect;
 
 	/* store data which is needed to check whether cached buffer could be used for color managed display settings */
-	cache_data = MEM_callocN(sizeof(ColormnaageCacheData), "color manage cache imbuf data");
+	cache_data = MEM_callocN(sizeof(ColormanageCacheData), "color manage cache imbuf data");
 	cache_data->look = view_settings->look;
 	cache_data->exposure = view_settings->exposure;
 	cache_data->gamma = view_settings->gamma;
 	cache_data->dither = view_settings->dither;
+	cache_data->white_value = view_settings->white_value;
 	cache_data->flag = view_settings->flag;
 	cache_data->curve_mapping = curve_mapping;
 	cache_data->curve_mapping_timestamp = curve_mapping_timestamp;
@@ -475,6 +484,7 @@ static void colormanage_load_config(OCIO_ConstConfigRcPtr *config)
 
 	/* get roles */
 	colormanage_role_color_space_name_get(config, global_role_scene_linear, OCIO_ROLE_SCENE_LINEAR, NULL);
+	colormanage_role_color_space_name_get(config, global_role_xyz, OCIO_ROLE_XYZ, NULL);
 	colormanage_role_color_space_name_get(config, global_role_color_picking, OCIO_ROLE_COLOR_PICKING, NULL);
 	colormanage_role_color_space_name_get(config, global_role_texture_painting, OCIO_ROLE_TEXTURE_PAINT, NULL);
 	colormanage_role_color_space_name_get(config, global_role_default_sequencer, OCIO_ROLE_DEFAULT_SEQUENCER, OCIO_ROLE_SCENE_LINEAR);
@@ -710,7 +720,7 @@ void colormanage_cache_free(ImBuf *ibuf)
 	}
 
 	if (ibuf->colormanage_cache) {
-		ColormnaageCacheData *cache_data = colormanage_cachedata_get(ibuf);
+		ColormanageCacheData *cache_data = colormanage_cachedata_get(ibuf);
 		struct MovieCache *moviecache = colormanage_moviecache_get(ibuf);
 
 		if (cache_data) {
@@ -773,7 +783,7 @@ static ColorSpace *display_transform_get_colorspace(const ColorManagedViewSettin
 static OCIO_ConstProcessorRcPtr *create_display_buffer_processor(const char *look,
                                                                  const char *view_transform,
                                                                  const char *display,
-                                                                 float exposure, float gamma,
+                                                                 float gamma,
                                                                  const char *from_colorspace)
 {
 	OCIO_ConstConfigRcPtr *config = OCIO_getCurrentConfig();
@@ -790,21 +800,6 @@ static OCIO_ConstProcessorRcPtr *create_display_buffer_processor(const char *loo
 	if (look_descr->is_noop == false) {
 		OCIO_displayTransformSetLooksOverrideEnabled(dt, true);
 		OCIO_displayTransformSetLooksOverride(dt, look);
-	}
-
-	/* fstop exposure control */
-	if (exposure != 0.0f) {
-		OCIO_MatrixTransformRcPtr *mt;
-		float gain = powf(2.0f, exposure);
-		const float scale4f[] = {gain, gain, gain, 1.0f};
-		float m44[16], offset4[4];
-
-		OCIO_matrixTransformScale(m44, offset4, scale4f);
-		mt = OCIO_createMatrixTransform();
-		OCIO_matrixTransformSetValue(mt, m44, offset4);
-		OCIO_displayTransformSetLinearCC(dt, (OCIO_ConstTransformRcPtr *) mt);
-
-		OCIO_matrixTransformRelease(mt);
 	}
 
 	/* post-display gamma transform */
@@ -947,6 +942,7 @@ static void init_default_view_settings(const ColorManagedDisplaySettings *displa
 	view_settings->flag = 0;
 	view_settings->gamma = 1.0f;
 	view_settings->exposure = 0.0f;
+	view_settings->white_value = 0.0f;
 	view_settings->curve_mapping = NULL;
 }
 
@@ -961,6 +957,37 @@ static void curve_mapping_apply_pixel(CurveMapping *curve_mapping, float *pixel,
 	}
 	else {
 		curvemapping_evaluate_premulRGBF(curve_mapping, pixel, pixel);
+	}
+}
+
+static void tonemap_apply_pixel(float white_value_inv_sqr, float *pixel, int channels)
+{
+	if (channels == 1) {
+		pixel[0] = pixel[0] * (1.0f + pixel[0] * white_value_inv_sqr) / (1.0f + pixel[0]);
+	}
+	else if (channels == 2) {
+		pixel[0] = pixel[0] * (1.0f + pixel[0] * white_value_inv_sqr) / (1.0f + pixel[0]);
+		pixel[1] = pixel[1] * (1.0f + pixel[1] * white_value_inv_sqr) / (1.0f + pixel[1]);
+	}
+	else {
+		pixel[0] = pixel[0] * (1.0f + pixel[0] * white_value_inv_sqr) / (1.0f + pixel[0]);
+		pixel[1] = pixel[1] * (1.0f + pixel[1] * white_value_inv_sqr) / (1.0f + pixel[1]);
+		pixel[2] = pixel[2] * (1.0f + pixel[2] * white_value_inv_sqr) / (1.0f + pixel[2]);
+	}
+}
+
+static void exposure_apply_pixel(float gain, float *pixel, int channels) {
+	if (channels == 1) {
+		pixel[0] *= gain;
+	}
+	else if (channels == 2) {
+		pixel[0] *= gain;
+		pixel[1] *= gain;
+	}
+	else {
+		pixel[0] *= gain;
+		pixel[1] *= gain;
+		pixel[2] *= gain;
 	}
 }
 
@@ -1072,6 +1099,7 @@ static void colormanage_check_view_settings(ColorManagedDisplaySettings *display
 	if (view_settings->exposure == 0.0f && view_settings->gamma == 0.0f) {
 		view_settings->exposure = 0.0f;
 		view_settings->gamma = 1.0f;
+		view_settings->white_value = 0.0f;
 	}
 }
 
@@ -1162,6 +1190,8 @@ const char *IMB_colormanagement_role_colorspace_name_get(int role)
 	switch (role) {
 		case COLOR_ROLE_SCENE_LINEAR:
 			return global_role_scene_linear;
+		case COLOR_ROLE_XYZ:
+			return global_role_xyz;
 		case COLOR_ROLE_COLOR_PICKING:
 			return global_role_color_picking;
 		case COLOR_ROLE_TEXTURE_PAINTING:
@@ -1506,7 +1536,8 @@ static bool is_ibuf_rect_in_display_space(ImBuf *ibuf, const ColorManagedViewSet
 {
 	if ((view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) == 0 &&
 	    view_settings->exposure == 0.0f &&
-	    view_settings->gamma == 1.0f)
+	    view_settings->gamma == 1.0f &&
+	    view_settings->white_value == 0.0f)
 	{
 		const char *from_colorspace = ibuf->rect_colorspace->name;
 		const char *to_colorspace = IMB_colormanagement_get_display_colorspace_name(view_settings, display_settings);
@@ -2558,6 +2589,16 @@ void IMB_colormanagment_colorspace_from_ibuf_ftype(ColorManagedColorspaceSetting
 	}
 }
 
+ColorSpace *IMB_colormanagement_colorspace_get_named(const char *name)
+{
+	return colormanage_colorspace_get_named(name);
+}
+
+ColorSpace *IMB_colormanagement_colorspace_get_indexed(int index)
+{
+	return colormanage_colorspace_get_indexed(index);
+}
+
 /*********************** Looks functions *************************/
 
 ColorManagedLook *colormanage_look_add(const char *name, const char *process_space, bool is_noop)
@@ -3094,7 +3135,6 @@ ColormanageProcessor *IMB_colormanagement_display_processor_new(const ColorManag
 	cm_processor->processor = create_display_buffer_processor(applied_view_settings->look,
 	                                                          applied_view_settings->view_transform,
 	                                                          display_settings->display_device,
-	                                                          applied_view_settings->exposure,
 	                                                          applied_view_settings->gamma,
 	                                                          global_role_scene_linear);
 
@@ -3102,6 +3142,16 @@ ColormanageProcessor *IMB_colormanagement_display_processor_new(const ColorManag
 		cm_processor->curve_mapping = curvemapping_copy(applied_view_settings->curve_mapping);
 		curvemapping_premultiply(cm_processor->curve_mapping, false);
 	}
+	
+	if (applied_view_settings->exposure == 0.0f)
+		cm_processor->gain = 1.0f;
+	else
+		cm_processor->gain = powf(2.0f, applied_view_settings->exposure);
+
+	if (applied_view_settings->white_value == 0.0f)
+		cm_processor->white_inv_sqr = 1.0f;
+	else
+		cm_processor->white_inv_sqr = powf(2.0f, -2.0f * applied_view_settings->white_value);
 
 	return cm_processor;
 }
@@ -3123,6 +3173,12 @@ ColormanageProcessor *IMB_colormanagement_colorspace_processor_new(const char *f
 
 void IMB_colormanagement_processor_apply_v4(ColormanageProcessor *cm_processor, float pixel[4])
 {
+	if (cm_processor->gain != 1.0f)
+		exposure_apply_pixel(cm_processor->gain, pixel, 3);
+
+	if (cm_processor->white_inv_sqr != 1.0f)
+		tonemap_apply_pixel(cm_processor->white_inv_sqr, pixel, 3);
+
 	if (cm_processor->curve_mapping)
 		curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
 
@@ -3132,6 +3188,12 @@ void IMB_colormanagement_processor_apply_v4(ColormanageProcessor *cm_processor, 
 
 void IMB_colormanagement_processor_apply_v4_predivide(ColormanageProcessor *cm_processor, float pixel[4])
 {
+	if (cm_processor->gain != 1.0f)
+		exposure_apply_pixel(cm_processor->gain, pixel, 3);
+
+	if (cm_processor->white_inv_sqr != 1.0f)
+		tonemap_apply_pixel(cm_processor->white_inv_sqr, pixel, 3);
+	
 	if (cm_processor->curve_mapping)
 		curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
 
@@ -3141,6 +3203,12 @@ void IMB_colormanagement_processor_apply_v4_predivide(ColormanageProcessor *cm_p
 
 void IMB_colormanagement_processor_apply_v3(ColormanageProcessor *cm_processor, float pixel[3])
 {
+	if (cm_processor->gain != 1.0f)
+		exposure_apply_pixel(cm_processor->gain, pixel, 3);
+
+	if (cm_processor->white_inv_sqr != 1.0f)
+		tonemap_apply_pixel(cm_processor->white_inv_sqr, pixel, 3);
+	
 	if (cm_processor->curve_mapping)
 		curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
 
@@ -3157,6 +3225,13 @@ void IMB_colormanagement_processor_apply_pixel(struct ColormanageProcessor *cm_p
 		IMB_colormanagement_processor_apply_v3(cm_processor, pixel);
 	}
 	else if (channels == 1) {
+		if (cm_processor->gain != 1.0f) {
+			exposure_apply_pixel(cm_processor->gain, pixel, 3);
+		}
+
+		if (cm_processor->white_inv_sqr != 1.0f) {
+			tonemap_apply_pixel(cm_processor->white_inv_sqr, pixel, 1);
+		}
 		if (cm_processor->curve_mapping) {
 			curve_mapping_apply_pixel(cm_processor->curve_mapping, pixel, 1);
 		}
@@ -3169,6 +3244,31 @@ void IMB_colormanagement_processor_apply_pixel(struct ColormanageProcessor *cm_p
 void IMB_colormanagement_processor_apply(ColormanageProcessor *cm_processor, float *buffer, int width, int height,
                                          int channels, bool predivide)
 {
+	/* apply exposure*/
+	if (cm_processor->gain != 1.0f) {
+		int x, y;
+
+		for (y = 0; y < height; y++) {
+			for (x = 0; x < width; x++) {
+				float *pixel = buffer + channels * (y * width + x);
+
+				exposure_apply_pixel(cm_processor->gain, pixel, channels);
+			}
+		}
+	}
+	/* apply tonemapping*/
+	if (cm_processor->white_inv_sqr != 1.0f) {
+		int x, y;
+
+		for (y = 0; y < height; y++) {
+			for (x = 0; x < width; x++) {
+				float *pixel = buffer + channels * (y * width + x);
+
+				tonemap_apply_pixel(cm_processor->white_inv_sqr, pixel, channels);
+			}
+		}
+	}
+	
 	/* apply curve mapping */
 	if (cm_processor->curve_mapping) {
 		int x, y;
@@ -3305,6 +3405,7 @@ static void update_glsl_display_processor(const ColorManagedViewSettings *view_s
 		BLI_strncpy(global_glsl_state.input, from_colorspace, MAX_COLORSPACE_NAME);
 		global_glsl_state.exposure = view_settings->exposure;
 		global_glsl_state.gamma = view_settings->gamma;
+		global_glsl_state.white_value = view_settings->white_value;
 
 		/* We're using curve mapping's address as a cache ID,
 		 * so we need to make sure re-allocation gives new address here.
@@ -3344,7 +3445,6 @@ static void update_glsl_display_processor(const ColorManagedViewSettings *view_s
 			create_display_buffer_processor(global_glsl_state.look,
 			                                global_glsl_state.view,
 			                                global_glsl_state.display,
-			                                global_glsl_state.exposure,
 			                                global_glsl_state.gamma,
 			                                global_glsl_state.input);
 	}
@@ -3401,7 +3501,7 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(const ColorManagedViewSettin
 
 	return OCIO_setupGLSLDraw(&global_glsl_state.ocio_glsl_state, global_glsl_state.processor,
 	                          global_glsl_state.use_curve_mapping ? &global_glsl_state.curve_mapping_settings : NULL,
-	                          dither, predivide);
+							  dither, view_settings->white_value, view_settings->exposure, predivide);
 }
 
 /* Configures GLSL shader for conversion from scene linear to display space */

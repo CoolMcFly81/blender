@@ -31,6 +31,8 @@ roles:
   color_picking: Raw
   texture_paint: Raw
 
+  xyz: XYZ
+
 displays:
   sRGB:
     - !<View> {name: Default, colorspace: sRGB}
@@ -112,6 +114,18 @@ colorspaces:
     to_reference: !<FileTransform> {src: rec709_to_aces.spimtx, interpolation: linear, direction: inverse}
 
   - !<ColorSpace>
+    name: Linear BGR
+    family: aces
+    equalitygroup:
+    bitdepth: 32f
+    description: |
+      Rec. 709 (Full Range), Blender native linear space
+    isdata: false
+    allocation: lg2
+    allocationvars: [-15, 6]
+    from_reference: !<FileTransform> {src: rgb_to_bgr.spimtx, interpolation: linear}
+
+  - !<ColorSpace>
     name: rrt_srgb
     family: rrt
     equalitygroup:
@@ -177,8 +191,7 @@ colorspaces:
     allocationvars: [-8.5, 5]
     from_reference: !<GroupTransform>
       children:
-        - !<FileTransform> {src: rec709_to_aces.spimtx, interpolation: linear}
-        - !<FileTransform> {src: aces_to_xyz.spimtx, interpolation: linear}
+        - !<FileTransform> {src: srgb_to_xyz.spimtx, interpolation: linear}
 
   - !<ColorSpace>
     name: rrt_xyz

@@ -2606,10 +2606,6 @@ static void rna_Node_image_layer_update(Main *bmain, Scene *scene, PointerRNA *p
 	BKE_image_signal(ima, iuser, IMA_SIGNAL_SRC_CHANGE);
 	
 	rna_Node_update(bmain, scene, ptr);
-
-	if (scene->nodetree != NULL) {
-		ntreeCompositForceHidden(scene->nodetree);
-	}
 }
 
 static EnumPropertyItem *renderresult_layers_add_enum(RenderLayer *rl)
@@ -2741,14 +2737,6 @@ static EnumPropertyItem *rna_Node_scene_layer_itemf(bContext *UNUSED(C), Pointer
 	*r_free = true;
 	
 	return item;
-}
-
-static void rna_Node_scene_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
-{
-	rna_Node_update(bmain, scene, ptr);
-	if (scene->nodetree != NULL) {
-		ntreeCompositForceHidden(scene->nodetree);
-	}
 }
 
 static EnumPropertyItem *rna_Node_channel_itemf(bContext *UNUSED(C), PointerRNA *ptr,
@@ -2916,6 +2904,30 @@ static bNodeSocket *rna_NodeOutputFile_slots_new(ID *id, bNode *node, bContext *
 	return sock;
 }
 
+static void rna_ShaderNodeIESLight_mode_set(PointerRNA *ptr, int value)
+{
+	bNode *node = (bNode *)ptr->data;
+	NodeShaderIESLight *nss = node->storage;
+
+	if (nss->mode != value) {
+		nss->mode = value;
+		nss->filepath[0] = '\0';
+
+		/* replace text datablock by filepath */
+		if (node->id) {
+			Text *text = (Text *)node->id;
+
+			if (value == NODE_IES_EXTERNAL && text->name) {
+				BLI_strncpy(nss->filepath, text->name, sizeof(nss->filepath));
+				BLI_path_rel(nss->filepath, G.main->name);
+			}
+
+			id_us_min(node->id);
+			node->id = NULL;
+		}
+	}
+}
+
 static void rna_ShaderNodeScript_mode_set(PointerRNA *ptr, int value)
 {
 	bNode *node = (bNode *)ptr->data;
@@ -2995,16 +3007,7 @@ static void rna_ShaderNodeScript_update(Main *bmain, Scene *scene, PointerRNA *p
 	ED_node_tag_update_nodetree(bmain, ntree, node);
 }
 
-static void rna_ShaderNodeSubsurface_update(Main *bmain, Scene *scene, PointerRNA *ptr)
-{
-	bNodeTree *ntree = (bNodeTree *)ptr->id.data;
-	bNode *node = (bNode *)ptr->data;
-
-	nodeUpdate(ntree, node);
-	rna_Node_update(bmain, scene, ptr);
-}
-
-static void rna_CompositorNodeScale_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_Node_custom_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	bNodeTree *ntree = (bNodeTree *)ptr->id.data;
 	bNode *node = (bNode *)ptr->data;
@@ -3254,6 +3257,12 @@ static EnumPropertyItem node_script_mode_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+static EnumPropertyItem node_ies_mode_items[] = {
+	{NODE_IES_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text datablock"},
+	{NODE_IES_EXTERNAL, "EXTERNAL", 0, "External", "Use external .ies file"},
+	{0, NULL, 0, NULL, NULL}
+};
+
 /* -- Common nodes ---------------------------------------------------------- */
 
 static void def_group_input(StructRNA *srna)
@@ -3470,6 +3479,17 @@ static void def_sh_output(StructRNA *srna)
 	prop = RNA_def_property(srna, "is_active_output", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", NODE_DO_OUTPUT);
 	RNA_def_property_ui_text(prop, "Active Output", "True if this node is used as the active output");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_sh_aov_output(StructRNA *srna)
+{
+	PropertyRNA *prop;
+
+	RNA_def_struct_sdna_from(srna, "NodeShaderAOVOutput", "storage");
+
+	prop = RNA_def_property(srna, "aov", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "AOV", "Name of the AOV that this output writes to");
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
@@ -3794,6 +3814,17 @@ static void def_sh_tex_image(StructRNA *srna)
 	RNA_def_property_ui_text(prop, "Image User",
 	                         "Parameters defining which layer, pass and frame of the image is displayed");
 	RNA_def_property_update(prop, 0, "rna_Node_update");
+
+	prop = RNA_def_property(srna, "uv_map", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "UV Map", "UV coordinates to be used for mapping");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	RNA_def_struct_sdna_from(srna, "bNode", NULL);
+
+	prop = RNA_def_property(srna, "use_udim", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom1", 1);
+	RNA_def_property_ui_text(prop, "Use UDIM", "Enables support for multi-tile texture maps");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_custom_update");
 }
 
 static void def_sh_tex_gradient(StructRNA *srna)
@@ -4188,6 +4219,23 @@ static void def_glass(StructRNA *srna)
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+static void def_principled(StructRNA *srna)
+{
+	static EnumPropertyItem prop_principled_distribution_items[] = {
+		{ SHD_GLOSSY_GGX, "GGX", 0, "GGX", "" },
+		{ SHD_GLOSSY_MULTI_GGX, "MULTI_GGX", 0, "Multiscatter GGX", "" },
+		{ 0, NULL, 0, NULL, NULL }
+	};
+
+	PropertyRNA *prop;
+
+	prop = RNA_def_property(srna, "distribution", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "custom1");
+	RNA_def_property_enum_items(prop, prop_principled_distribution_items);
+	RNA_def_property_ui_text(prop, "Distribution", "");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_custom_update");
+}
+
 static void def_refraction(StructRNA *srna)
 {
 	PropertyRNA *prop;
@@ -4349,7 +4397,33 @@ static void def_sh_subsurface(StructRNA *srna)
 	RNA_def_property_enum_sdna(prop, NULL, "custom1");
 	RNA_def_property_enum_items(prop, prop_subsurface_falloff_items);
 	RNA_def_property_ui_text(prop, "Falloff", "Function to determine how much light nearby points contribute based on their distance to the shading point");
-	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNodeSubsurface_update");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_custom_update");
+}
+
+static void def_sh_ies_light(StructRNA *srna)
+{
+	PropertyRNA *prop;
+
+	prop = RNA_def_property(srna, "ies", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "id");
+	RNA_def_property_struct_type(prop, "Text");
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+	RNA_def_property_ui_text(prop, "IES", "Internal IES file");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	RNA_def_struct_sdna_from(srna, "NodeShaderIESLight", "storage");
+
+	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
+	RNA_def_property_ui_text(prop, "File Path", "IES light path");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_funcs(prop, NULL, "rna_ShaderNodeIESLight_mode_set", NULL);
+	RNA_def_property_enum_items(prop, node_ies_mode_items);
+	RNA_def_property_ui_text(prop, "IES Source", "");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	RNA_def_struct_sdna_from(srna, "bNode", NULL);
 }
 
 static void def_sh_script(StructRNA *srna)
@@ -4778,7 +4852,7 @@ static void def_cmp_render_layers(StructRNA *srna)
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Node_scene_layer_itemf");
 	RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
 	RNA_def_property_ui_text(prop, "Layer", "");
-	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_scene_layer_update");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 static void rna_def_cmp_output_file_slot_file(BlenderRNA *brna)
@@ -5005,7 +5079,7 @@ static void def_cmp_scale(StructRNA *srna)
 	RNA_def_property_enum_sdna(prop, NULL, "custom1");
 	RNA_def_property_enum_items(prop, space_items);
 	RNA_def_property_ui_text(prop, "Space", "Coordinate space to scale relative to");
-	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_CompositorNodeScale_update");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_custom_update");
 
 	/* expose 2 flags as a enum of 3 items */
 	prop = RNA_def_property(srna, "frame_method", PROP_ENUM, PROP_NONE);
@@ -6894,6 +6968,11 @@ static void rna_def_node_socket(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "enabled", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SOCK_UNAVAIL);
 	RNA_def_property_ui_text(prop, "Enabled", "Enable the socket");
+	RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, NULL);
+
+	prop = RNA_def_property(srna, "is_virtual", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SOCK_VIRTUAL);
+	RNA_def_property_ui_text(prop, "Virtual", "Socket is Virtual");
 	RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, NULL);
 
 	prop = RNA_def_property(srna, "link_limit", PROP_INT, PROP_NONE);
