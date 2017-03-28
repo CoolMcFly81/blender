@@ -256,14 +256,6 @@ public:
 		int y, int w, int h, int elem) = 0;
 	virtual void mem_zero(device_memory& mem) = 0;
 	virtual void mem_free(device_memory& mem) = 0;
-	virtual int mem_get_offset_alignment() { return 1; }
-	virtual device_ptr mem_get_offset_ptr(device_memory& mem, int offset, int size, MemoryType type)
-	{
-		/* Only required for devices that implement denoising. */
-		assert(false);
-		(void) mem; (void) offset; (void) size; (void) type;
-		return (device_ptr) 0;
-	}
 
 	/* constant memory */
 	virtual void const_copy_to(const char *name, void *host, size_t size) = 0;
@@ -312,8 +304,6 @@ public:
 	/* multi device */
 	virtual void map_tile(Device * /*sub_device*/, RenderTile& /*tile*/) {}
 	virtual int device_number(Device * /*sub_device*/) { return 0; }
-	virtual void map_neighbor_tiles(Device * /*sub_device*/, RenderTile * /*tiles*/) {}
-	virtual void unmap_neighbor_tiles(Device * /*sub_device*/, RenderTile * /*tiles*/) {}
 
 	/* static */
 	static Device *create(DeviceInfo& info, Stats &stats, bool background = true);

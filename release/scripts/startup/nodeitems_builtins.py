@@ -217,7 +217,6 @@ shader_node_categories = [
     ShaderNewNodeCategory("SH_NEW_OUTPUT", "Output", items=[
         NodeItem("ShaderNodeOutputMaterial", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeOutputLamp", poll=object_shader_nodes_poll),
-        NodeItem("ShaderNodeAOVOutput", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeOutputWorld", poll=world_shader_nodes_poll),
         NodeItem("ShaderNodeOutputLineStyle", poll=line_style_shader_nodes_poll),
         NodeItem("NodeGroupOutput", poll=group_input_output_item_poll),
@@ -226,7 +225,6 @@ shader_node_categories = [
         NodeItem("ShaderNodeMixShader"),
         NodeItem("ShaderNodeAddShader"),
         NodeItem("ShaderNodeBsdfDiffuse", poll=object_shader_nodes_poll),
-        NodeItem("ShaderNodeBsdfPrincipled", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeBsdfGlossy", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeBsdfTransparent", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeBsdfRefraction", poll=object_shader_nodes_poll),
@@ -257,7 +255,6 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexChecker"),
         NodeItem("ShaderNodeTexBrick"),
         NodeItem("ShaderNodeTexPointDensity"),
-        NodeItem("ShaderNodeIESLight"),
         ]),
     ShaderNewNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMixRGB"),

@@ -67,37 +67,6 @@ public:
 	TextureMapping tex_mapping;
 };
 
-class UDIMTextureNode : public ShaderNode {
-public:
-	SHADER_NODE_NO_CLONE_CLASS(UDIMTextureNode);
-	~UDIMTextureNode();
-	ShaderNode *clone() const;
-	void attributes(Shader *shader, AttributeRequestSet *attributes);
-	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
-
-	ImageManager *image_manager;
-
-	struct ImageTile {
-		bool is_float;
-		bool is_linear;
-		int slot;
-		ustring filename;
-		bool used;
-
-		int get_encoding(NodeImageColorSpace color_space);
-	};
-
-	bool use_alpha;
-	ustring filename;
-	NodeImageColorSpace color_space;
-	InterpolationType interpolation;
-	ExtensionType extension;
-	ustring uv_map;
-
-	int columns;
-	vector<ImageTile> tiles;
-};
-
 /* Any node which uses image manager's slot should be a subclass of this one. */
 class ImageSlotTextureNode : public TextureNode {
 public:
@@ -187,19 +156,6 @@ public:
 	void *volume;
 	float displacement;
 	float3 normal;
-
-	/* Don't allow output node de-duplication. */
-	virtual bool equals(const ShaderNode& /*other*/) { return false; }
-};
-
-class AOVOutputNode : public ShaderNode {
-public:
-	SHADER_NODE_CLASS(AOVOutputNode)
-
-	float value;
-	float3 color;
-
-	ustring name;
 
 	/* Don't allow output node de-duplication. */
 	virtual bool equals(const ShaderNode& /*other*/) { return false; }
@@ -321,25 +277,6 @@ public:
 	}
 };
 
-class IESLightNode : public ShaderNode {
-public:
-	SHADER_NODE_NO_CLONE_CLASS(IESLightNode)
-
-	~IESLightNode();
-	ShaderNode *clone() const;
-
-	ImageManager *image_manager;
-
-	ustring filename;
-	float strength;
-	float3 vector;
-
-	string ies;
-	int slot;
-
-	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
-};
-
 class MappingNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MappingNode)
@@ -422,39 +359,6 @@ public:
 	SHADER_NODE_CLASS(DiffuseBsdfNode)
 
 	float roughness;
-};
-
-/* Disney principled BRDF */
-class PrincipledBsdfNode : public ShaderNode {
-public:
-	SHADER_NODE_CLASS(PrincipledBsdfNode)
-
-	bool has_spatial_varying() { return true; }
-	bool has_surface_bssrdf() { return true; }
-	bool has_bssrdf_bump();
-	void compile(SVMCompiler& compiler, ShaderInput *metallic, ShaderInput *subsurface, ShaderInput *subsurface_radius,
-		ShaderInput *specular, ShaderInput *roughness, ShaderInput *specular_tint, ShaderInput *anisotropic,
-		ShaderInput *sheen, ShaderInput *sheen_tint, ShaderInput *clearcoat, ShaderInput *clearcoat_gloss,
-		ShaderInput *ior, ShaderInput *transparency, ShaderInput *anisotropic_rotation, ShaderInput *refraction_roughness);
-
-	float3 base_color;
-	float3 subsurface_color, subsurface_radius;
-	float metallic, subsurface, specular, roughness, specular_tint, anisotropic,
-		sheen, sheen_tint, clearcoat, clearcoat_gloss, ior, transparency,
-		anisotropic_rotation, refraction_roughness;
-	float3 normal, clearcoat_normal, tangent;
-	float surface_mix_weight;
-	ClosureType closure, distribution, distribution_orig;
-
-	virtual bool equals(const ShaderNode * /*other*/)
-	{
-		/* TODO(sergey): With some care BSDF nodes can be de-duplicated. */
-		return false;
-	}
-
-	ClosureType get_closure_type() { return closure; }
-	bool has_integrator_dependency();
-	void attributes(Shader *shader, AttributeRequestSet *attributes);
 };
 
 class TranslucentBsdfNode : public BsdfNode {

@@ -3,7 +3,6 @@ set(INC
 	.
 	../graph
 	../kernel
-	../filter
 	../kernel/split
 	../kernel/svm
 	../kernel/osl
@@ -33,7 +32,6 @@ set(SRC
 	device.cpp
 	device_cpu.cpp
 	device_cuda.cpp
-	device_denoising.cpp
 	device_multi.cpp
 	device_opencl.cpp
 	device_split_kernel.cpp
@@ -57,7 +55,6 @@ endif()
 
 set(SRC_HEADERS
 	device.h
-	device_denoising.h
 	device_memory.h
 	device_intern.h
 	device_network.h

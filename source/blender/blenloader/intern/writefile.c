@@ -1052,7 +1052,7 @@ static void write_nodetree_nolib(WriteData *wd, bNodeTree *ntree)
 				writestruct(wd, DATA, NodeImageMultiFileSocket, 1, sock->storage);
 			}
 		}
-		if (ELEM(node->type, CMP_NODE_IMAGE, CMP_NODE_R_LAYERS)) {
+		if (node->type == CMP_NODE_IMAGE) {
 			/* write extra socket info */
 			for (sock = node->outputs.first; sock; sock = sock->next) {
 				writestruct(wd, DATA, NodeImageLayer, 1, sock->storage);
@@ -2715,9 +2715,6 @@ static void write_scene(WriteData *wd, Scene *sce)
 		}
 		for (FreestyleLineSet *fls = srl->freestyleConfig.linesets.first; fls; fls = fls->next) {
 			writestruct(wd, DATA, FreestyleLineSet, 1, fls);
-		}
-		if (srl->prop) {
-			IDP_WriteProperty(srl->prop, wd);
 		}
 	}
 

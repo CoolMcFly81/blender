@@ -76,7 +76,6 @@ void register_node_type_sh_combxyz(void);
 void register_node_type_sh_hue_sat(void);
 void register_node_type_sh_tex_brick(void);
 void register_node_type_sh_tex_pointdensity(void);
-void register_node_type_sh_aov_output(void);
 
 void register_node_type_sh_attribute(void);
 void register_node_type_sh_geometry(void);
@@ -107,7 +106,6 @@ void register_node_type_sh_bsdf_transparent(void);
 void register_node_type_sh_bsdf_velvet(void);
 void register_node_type_sh_bsdf_toon(void);
 void register_node_type_sh_bsdf_anisotropic(void);
-void register_node_type_sh_bsdf_principled(void);
 void register_node_type_sh_emission(void);
 void register_node_type_sh_holdout(void);
 void register_node_type_sh_volume_absorption(void);
@@ -135,7 +133,6 @@ void register_node_type_sh_tex_musgrave(void);
 void register_node_type_sh_tex_noise(void);
 void register_node_type_sh_tex_checker(void);
 void register_node_type_sh_bump(void);
-void register_node_type_sh_ieslight(void);
 
 #endif
 

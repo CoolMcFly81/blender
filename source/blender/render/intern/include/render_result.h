@@ -53,7 +53,6 @@ struct ColorManagedViewSettings;
 
 /* New */
 
-struct RenderResult *render_result_new_preview(struct rcti *partrct);
 struct RenderResult *render_result_new(struct Render *re,
 	struct rcti *partrct, int crop, int savebuffers, const char *layername, const char *viewname);
 struct RenderResult *render_result_new_full_sample(struct Render *re,
@@ -67,11 +66,6 @@ void render_result_views_new(struct RenderResult *rr, struct RenderData *rd);
 /* Merge */
 
 void render_result_merge(struct RenderResult *rr, struct RenderResult *rrpart);
-
-/* Add Passes */
-
-void render_result_clone_passes(struct Render *re, struct RenderResult *rr, const char *viewname);
-void render_result_add_pass(struct RenderResult *rr, int channels, const char *name, const char *layername, const char *viewname, const char *chan_id);
 
 /* Free */
 
@@ -90,7 +84,7 @@ void render_result_exr_file_begin(struct Render *re);
 void render_result_exr_file_end(struct Render *re);
 
 /* render pass wrapper for gpencil */
-struct RenderPass *gp_add_pass(struct RenderResult *rr, struct RenderLayer *rl, int channels, const char *name, const char *viewname);
+struct RenderPass *gp_add_pass(struct RenderResult *rr, struct RenderLayer *rl, int channels, int passtype, const char *viewname);
 
 void render_result_exr_file_merge(struct RenderResult *rr, struct RenderResult *rrpart, const char *viewname);
 

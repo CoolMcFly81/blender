@@ -144,7 +144,7 @@ template<> struct device_type_traits<float2> {
 
 template<> struct device_type_traits<float3> {
 	static const DataType data_type = TYPE_FLOAT;
-	static const int num_elements = 4;
+	static const int num_elements = 3;
 };
 
 template<> struct device_type_traits<float4> {
@@ -173,9 +173,6 @@ class device_memory
 {
 public:
 	size_t memory_size() { return data_size*data_elements*datatype_size(data_type); }
-	size_t memory_num_to_bytes(int elements) {
-		return elements*data_elements*datatype_size(data_type);
-	}
 
 	/* data information */
 	DataType data_type;
@@ -214,22 +211,6 @@ protected:
 	/* no copying */
 	device_memory(const device_memory&);
 	device_memory& operator = (const device_memory&);
-};
-
-template<typename T>
-class device_only_memory : public device_memory
-{
-public:
-	device_only_memory()
-	{
-		data_type = device_type_traits<T>::data_type;
-		data_elements = max(device_type_traits<T>::num_elements, 1);
-	}
-
-	void resize(size_t num)
-	{
-		device_memory::resize(num*sizeof(T));
-	}
 };
 
 /* Device Vector */
