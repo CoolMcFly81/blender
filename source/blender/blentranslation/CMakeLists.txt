@@ -60,5 +60,3 @@ if(WIN32)
 endif()
 
 blender_add_lib(bf_blentranslation "${SRC}" "${INC}" "${INC_SYS}")
-
-add_subdirectory(msgfmt)
