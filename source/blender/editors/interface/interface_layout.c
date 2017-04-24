@@ -1274,7 +1274,8 @@ static void ui_item_rna_size(
 	if (!w) {
 		if (type == PROP_ENUM && icon_only) {
 			w = ui_text_icon_width(layout, "", ICON_BLANK1, 0);
-			w += 0.6f * UI_UNIT_X;
+			if (index != RNA_ENUM_VALUE)
+				w += 0.6f * UI_UNIT_X;
 		}
 		else {
 			w = ui_text_icon_width(layout, name, icon, 0);
@@ -2174,12 +2175,13 @@ static void ui_litem_layout_row(uiLayout *litem)
 			bool min_flag = item->flag & UI_ITEM_MIN;
 			/* ignore min flag for rows with right or center alignment */
 			if (item->type != ITEM_BUTTON &&
-					ELEM(((uiLayout *)item)->alignment, UI_LAYOUT_ALIGN_RIGHT, UI_LAYOUT_ALIGN_CENTER) &&
-					litem->alignment == UI_LAYOUT_ALIGN_EXPAND && 
-					((uiItem *)litem)->flag & UI_ITEM_MIN) {
+			    ELEM(((uiLayout *)item)->alignment, UI_LAYOUT_ALIGN_RIGHT, UI_LAYOUT_ALIGN_CENTER) &&
+			    litem->alignment == UI_LAYOUT_ALIGN_EXPAND && 
+			    ((uiItem *)litem)->flag & UI_ITEM_MIN)
+			{
 				min_flag = false;
 			}
-			
+
 			if ((neww < minw || min_flag) && w != 0) {
 				/* fixed size */
 				item->flag |= UI_ITEM_FIXED;
@@ -2266,6 +2268,7 @@ static void ui_litem_estimate_column(uiLayout *litem, bool is_box)
 {
 	uiItem *item;
 	int itemw, itemh;
+	bool min_size_flag = true;
 
 	litem->w = 0;
 	litem->h = 0;
@@ -2273,11 +2276,17 @@ static void ui_litem_estimate_column(uiLayout *litem, bool is_box)
 	for (item = litem->items.first; item; item = item->next) {
 		ui_item_size(item, &itemw, &itemh);
 
+		min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
+
 		litem->w = MAX2(litem->w, itemw);
 		litem->h += itemh;
 
 		if (item->next && (!is_box || item != litem->items.first))
 			litem->h += litem->space;
+	}
+	
+	if (min_size_flag) {
+		litem->item.flag |= UI_ITEM_MIN;
 	}
 }
 
@@ -2446,6 +2455,7 @@ static void ui_litem_estimate_box(uiLayout *litem)
 	uiStyle *style = litem->root->style;
 
 	ui_litem_estimate_column(litem, true);
+	litem->item.flag &= ~UI_ITEM_MIN;
 	litem->w += 2 * style->boxspace;
 	litem->h += 2 * style->boxspace;
 }

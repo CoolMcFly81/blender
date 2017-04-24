@@ -17,9 +17,9 @@
 #ifndef __KERNEL_TYPES_H__
 #define __KERNEL_TYPES_H__
 
-#include "kernel_math.h"
-#include "svm/svm_types.h"
-#include "util_static_assert.h"
+#include "kernel/kernel_math.h"
+#include "kernel/svm/svm_types.h"
+#include "util/util_static_assert.h"
 
 #ifndef __KERNEL_GPU__
 #  define __KERNEL_CPU__
@@ -56,7 +56,13 @@ CCL_NAMESPACE_BEGIN
 
 #define VOLUME_STACK_SIZE		16
 
-#define WORK_POOL_SIZE 64
+#define WORK_POOL_SIZE_GPU 64
+#define WORK_POOL_SIZE_CPU 1
+#ifdef __KERNEL_GPU__
+#  define WORK_POOL_SIZE WORK_POOL_SIZE_GPU
+#else
+#  define WORK_POOL_SIZE WORK_POOL_SIZE_CPU
+#endif
 
 /* device capabilities */
 #ifdef __KERNEL_CPU__
@@ -72,6 +78,7 @@ CCL_NAMESPACE_BEGIN
 #    define __OSL__
 #  endif
 #  define __SUBSURFACE__
+#  define __PRINCIPLED__
 #  define __CMJ__
 #  define __VOLUME__
 #  define __VOLUME_SCATTER__
@@ -88,6 +95,7 @@ CCL_NAMESPACE_BEGIN
 #  define __VOLUME__
 #  define __VOLUME_SCATTER__
 #  define __SUBSURFACE__
+#  define __PRINCIPLED__
 #  define __SHADOW_RECORD_ALL__
 #  ifndef __SPLIT_KERNEL__
 #    define __BRANCHED_PATH__
@@ -103,6 +111,7 @@ CCL_NAMESPACE_BEGIN
 #    define __KERNEL_SHADING__
 #    define __KERNEL_ADV_SHADING__
 #    define __SUBSURFACE__
+#    define __PRINCIPLED__
 #    define __VOLUME__
 #    define __VOLUME_SCATTER__
 #    define __SHADOW_RECORD_ALL__
@@ -128,6 +137,7 @@ CCL_NAMESPACE_BEGIN
 #    define __KERNEL_SHADING__
 #    define __KERNEL_ADV_SHADING__
 #    define __SUBSURFACE__
+#    define __PRINCIPLED__
 #    define __VOLUME__
 #    define __VOLUME_SCATTER__
 #    define __SHADOW_RECORD_ALL__
@@ -214,7 +224,10 @@ CCL_NAMESPACE_BEGIN
 #  undef __TRANSPARENT_SHADOWS__
 #endif
 #ifdef __NO_SHADOW_TRICKS__
-#undef __SHADOW_TRICKS__
+#  undef __SHADOW_TRICKS__
+#endif
+#ifdef __NO_PRINCIPLED__
+#  undef __PRINCIPLED__
 #endif
 
 /* Random Numbers */
