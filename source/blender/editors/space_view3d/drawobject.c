@@ -867,7 +867,7 @@ void view3d_cached_text_draw_add(const float co[3],
 	memcpy(vos->str, str, alloc_len);
 }
 
-void view3d_cached_text_draw_end(View3D *v3d, ARegion *ar, bool depth_write, float mat[4][4])
+void view3d_cached_text_draw_end(View3D *v3d, ARegion *ar, bool depth_write)
 {
 	RegionView3D *rv3d = ar->regiondata;
 	ViewCachedString *vos;
@@ -877,9 +877,6 @@ void view3d_cached_text_draw_end(View3D *v3d, ARegion *ar, bool depth_write, flo
 
 	/* project first and test */
 	for (vos = g_v3d_strings[g_v3d_string_level]; vos; vos = vos->next) {
-		if (mat && !(vos->flag & V3D_CACHE_TEXT_WORLDSPACE))
-			mul_m4_v3(mat, vos->vec);
-
 		if (ED_view3d_project_short_ex(ar,
 		                               (vos->flag & V3D_CACHE_TEXT_GLOBALSPACE) ? rv3d->persmat : rv3d->persmatob,
 		                               (vos->flag & V3D_CACHE_TEXT_LOCALCLIP) != 0,
@@ -5123,7 +5120,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 			copy_m4_m4(imat, rv3d->viewinv);
 			normalize_v3(imat[0]);
 			normalize_v3(imat[1]);
-			/* fall-through */
+			ATTR_FALLTHROUGH;
 		case PART_DRAW_CROSS:
 		case PART_DRAW_AXIS:
 			/* lets calculate the scale: */
@@ -7826,7 +7823,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 			draw_new_particle_system(scene, v3d, rv3d, base, psys, dt, dflag);
 		}
 		invert_m4_m4(ob->imat, ob->obmat);
-		view3d_cached_text_draw_end(v3d, ar, 0, NULL);
+		view3d_cached_text_draw_end(v3d, ar, 0);
 
 		glMultMatrixf(ob->obmat);
 		
@@ -8001,7 +7998,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 	
 	/* return warning, this is cached text draw */
 	invert_m4_m4(ob->imat, ob->obmat);
-	view3d_cached_text_draw_end(v3d, ar, 1, NULL);
+	view3d_cached_text_draw_end(v3d, ar, 1);
 	/* return warning, clear temp flag */
 	v3d->flag2 &= ~V3D_SHOW_SOLID_MATCAP;
 	
@@ -8440,8 +8437,8 @@ void draw_object_backbufsel(Scene *scene, View3D *v3d, RegionView3D *rv3d, Objec
 				bbs_mesh_wire(em, dm, bm_solidoffs);
 				bm_wireoffs = bm_solidoffs + em->bm->totedge;
 
-				/* we draw verts if vert select mode or if in transform (for snap). */
-				if ((ts->selectmode & SCE_SELECT_VERTEX) || (G.moving & G_TRANSFORM_EDIT)) {
+				/* we draw verts if vert select mode. */
+				if (ts->selectmode & SCE_SELECT_VERTEX) {
 					bbs_mesh_verts(em, dm, bm_wireoffs);
 					bm_vertoffs = bm_wireoffs + em->bm->totvert;
 				}
