@@ -204,6 +204,8 @@ void BKE_nurb_handle_calc(struct BezTriple *bezt, struct BezTriple *prev,  struc
 void BKE_nurb_handle_calc_simple(struct Nurb *nu, struct BezTriple *bezt);
 void BKE_nurb_handle_calc_simple_auto(struct Nurb *nu, struct BezTriple *bezt);
 
+void BKE_nurb_handle_smooth_all(struct BezTriple *bezt, int total, bool cyclic);
+
 void BKE_nurb_handles_calc(struct Nurb *nu);
 void BKE_nurb_handles_autocalc(struct Nurb *nu, int flag);
 void BKE_nurb_bezt_handle_test(struct BezTriple *bezt, const bool use_handle);
