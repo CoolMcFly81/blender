@@ -1077,7 +1077,7 @@ const FModifierTypeInfo *fmodifier_get_typeinfo(FModifier *fcm)
 /* API --------------------------- */
 
 /* Add a new F-Curve Modifier to the given F-Curve of a certain type */
-FModifier *add_fmodifier(ListBase *modifiers, int type)
+FModifier *add_fmodifier_raw(ListBase *modifiers, int type)
 {
 	const FModifierTypeInfo *fmi = get_fmodifier_typeinfo(type);
 	FModifier *fcm;
@@ -1098,6 +1098,7 @@ FModifier *add_fmodifier(ListBase *modifiers, int type)
 	fcm = MEM_callocN(sizeof(FModifier), "F-Curve Modifier");
 	fcm->type = type;
 	fcm->flag = FMODIFIER_FLAG_EXPANDED;
+	fcm->curve = NULL;
 	fcm->influence = 1.0f;
 	BLI_addtail(modifiers, fcm);
 	
@@ -1116,6 +1117,16 @@ FModifier *add_fmodifier(ListBase *modifiers, int type)
 	return fcm;
 }
 
+FModifier *add_fmodifier(FCurve *fcu, int type)
+{
+	FModifier *fcm = add_fmodifier_raw(&fcu->modifiers, type);
+
+	if (fcm)
+		fcm->curve = fcu;
+
+	return fcm;
+}
+
 /* Make a copy of the specified F-Modifier */
 FModifier *copy_fmodifier(FModifier *src)
 {
@@ -1129,6 +1140,7 @@ FModifier *copy_fmodifier(FModifier *src)
 	/* copy the base data, clearing the links */
 	dst = MEM_dupallocN(src);
 	dst->next = dst->prev = NULL;
+	dst->curve = NULL;
 	
 	/* make a new copy of the F-Modifier's data */
 	dst->data = MEM_dupallocN(src->data);
@@ -1157,6 +1169,7 @@ void copy_fmodifiers(ListBase *dst, ListBase *src)
 		
 		/* make a new copy of the F-Modifier's data */
 		fcm->data = MEM_dupallocN(fcm->data);
+		fcm->curve = NULL;
 		
 		/* only do specific constraints if required */
 		if (fmi && fmi->copy_data)

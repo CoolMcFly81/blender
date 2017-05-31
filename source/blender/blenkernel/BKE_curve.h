@@ -199,10 +199,12 @@ void BKE_nurb_bezt_calc_plane(struct Nurb *nu, struct BezTriple *bezt, float r_p
 
 void BKE_nurb_bpoint_calc_normal(struct Nurb *nu, struct BPoint *bp, float r_normal[3]);
 
-void BKE_nurb_handle_calc(struct BezTriple *bezt, struct BezTriple *prev,  struct BezTriple *next,
-                          const bool is_fcurve);
+void BKE_nurb_handle_calc(struct BezTriple *bezt, struct BezTriple *prev,  struct BezTriple *next);
+void BKE_nurb_handle_calc_fcurve(struct BezTriple *bezt, struct BezTriple *prev, struct BezTriple *next, bool smoothing);
 void BKE_nurb_handle_calc_simple(struct Nurb *nu, struct BezTriple *bezt);
 void BKE_nurb_handle_calc_simple_auto(struct Nurb *nu, struct BezTriple *bezt);
+
+void BKE_nurb_handle_smooth_all(struct BezTriple *bezt, int total, bool cyclic);
 
 void BKE_nurb_handles_calc(struct Nurb *nu);
 void BKE_nurb_handles_autocalc(struct Nurb *nu, int flag);

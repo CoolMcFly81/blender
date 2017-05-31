@@ -1386,7 +1386,7 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
 			BLI_addtail(&strip->fcurves, fcu);
 			
 			/* set default flags */
-			fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
+			fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED | FCURVE_AUTO_SMOOTHING);
 			
 			/* store path - make copy, and store that */
 			fcu->rna_path = BLI_strdupn("influence", 9);
@@ -1407,7 +1407,7 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
 			BLI_addtail(&strip->fcurves, fcu);
 			
 			/* set default flags */
-			fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
+			fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED | FCURVE_AUTO_SMOOTHING);
 			
 			/* store path - make copy, and store that */
 			fcu->rna_path = BLI_strdupn("strip_time", 10);
