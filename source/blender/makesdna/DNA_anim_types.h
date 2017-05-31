@@ -52,7 +52,6 @@ extern "C" {
 typedef struct FModifier {
 	struct FModifier *next, *prev;
 	
-	struct FCurve *curve;  /* containing curve, only used for updates to CYCLES */
 	void *data;			/* pointer to modifier data */
 	
 	char name[64];		/* user-defined description for the modifier - MAX_ID_NAME-2 */
@@ -526,8 +525,6 @@ typedef enum eFCurve_Flags {
 	FCURVE_INT_VALUES		= (1<<11),
 		/* curve can only have certain discrete-number values (no interpolation at all, for enums/booleans) */
 	FCURVE_DISCRETE_VALUES	= (1<<12),
-		/* curve uses the new smooth auto handle placement algorithm */
-	FCURVE_AUTO_SMOOTHING   = (1<<13),
 	
 		/* temporary tag for editing */
 	FCURVE_TAGGED			= (1<<15)

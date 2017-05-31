@@ -495,10 +495,7 @@ static void rna_FCurve_active_modifier_set(PointerRNA *ptr, PointerRNA value)
 
 static FModifier *rna_FCurve_modifiers_new(FCurve *fcu, int type)
 {
-	FModifier *fcm = add_fmodifier(fcu, type);
-	if (type == FMODIFIER_TYPE_CYCLES)
-		calchandles_fcurve(fcu);
-	return fcm;
+	return add_fmodifier(&fcu->modifiers, type);
 }
 
 static void rna_FCurve_modifiers_remove(FCurve *fcu, ReportList *reports, PointerRNA *fcm_ptr)
@@ -509,13 +506,8 @@ static void rna_FCurve_modifiers_remove(FCurve *fcu, ReportList *reports, Pointe
 		return;
 	}
 
-	bool update = (fcm->type == FMODIFIER_TYPE_CYCLES);
-
 	remove_fmodifier(&fcu->modifiers, fcm);
 	RNA_POINTER_INVALIDATE(fcm_ptr);
-
-	if (update)
-		calchandles_fcurve(fcu);
 }
 
 static void rna_FModifier_active_set(PointerRNA *ptr, int UNUSED(value))
@@ -594,14 +586,10 @@ static void rna_FModifier_blending_range(PointerRNA *ptr, float *min, float *max
 static void rna_FModifier_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	ID *id = ptr->id.data;
-	FModifier *fcm = (FModifier *)ptr->data;
 	AnimData *adt = BKE_animdata_from_id(id);
 	DAG_id_tag_update(id, (GS(id->name) == ID_OB) ? OB_RECALC_OB : OB_RECALC_DATA);
 	if (adt != NULL) {
 		adt->recalc |= ADT_RECALC_ANIM;
-	}
-	if (fcm->curve && fcm->type == FMODIFIER_TYPE_CYCLES) {
-		calchandles_fcurve(fcm->curve);
 	}
 }
 
@@ -1943,11 +1931,6 @@ static void rna_def_fcurve(BlenderRNA *brna)
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", FCURVE_VISIBLE);
 	RNA_def_property_ui_text(prop, "Hide", "F-Curve and its keyframes are hidden in the Graph Editor graphs");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_GRAPH, NULL);
-
-	prop = RNA_def_property(srna, "auto_smoothing", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", FCURVE_AUTO_SMOOTHING);
-	RNA_def_property_ui_text(prop, "Smoothed Auto Handles", "Uses new auto-handle placement algorithm that produces smooth curves");
-	RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FCurve_update_data");
 
 	/* State Info (for Debugging) */
 	prop = RNA_def_property(srna, "is_valid", PROP_BOOLEAN, PROP_NONE);

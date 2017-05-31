@@ -882,41 +882,6 @@ void fcurve_store_samples(FCurve *fcu, void *data, int start, int end, FcuSample
  * that the handles are correctly 
  */
 
-/* Checks if the F-Curve has a Cycles modifier with simple settings that warrant transition smoothing */
-static bool detect_cycle_modifier(FCurve *fcu)
-{
-	FModifier *fcm = fcu->modifiers.first;
-
-	if (!fcm || fcm->type != FMODIFIER_TYPE_CYCLES)
-		return false;
-
-	if (fcm->flag & (FMODIFIER_FLAG_DISABLED | FMODIFIER_FLAG_MUTED))
-		return false;
-
-	if (fcm->flag & (FMODIFIER_FLAG_RANGERESTRICT | FMODIFIER_FLAG_USEINFLUENCE))
-		return false;
-
-	FMod_Cycles *data = (FMod_Cycles*)fcm->data;
-
-	return data && data->after_cycles == 0 && data->before_cycles == 0 &&
-	    ELEM(data->before_mode, FCM_EXTRAPOLATE_CYCLIC, FCM_EXTRAPOLATE_CYCLIC_OFFSET) &&
-	    ELEM(data->after_mode, FCM_EXTRAPOLATE_CYCLIC, FCM_EXTRAPOLATE_CYCLIC_OFFSET);
-}
-
-/* If cyclic, set out by shifting in by the difference in position between from and to. */
-static BezTriple *cycle_offset_triple(BezTriple *out, const BezTriple *in, const BezTriple *from, const BezTriple *to)
-{
-	memcpy(out, in, sizeof(BezTriple));
-
-	float delta[3];
-	sub_v3_v3v3(delta, to->vec[1], from->vec[1]);
-
-	for (int i = 0; i < 3; i++)
-		add_v3_v3(out->vec[i], delta);
-
-	return out;
-}
-
 /* This function recalculates the handles of an F-Curve 
  * If the BezTriples have been rearranged, sort them first before using this.
  */
@@ -932,18 +897,10 @@ void calchandles_fcurve(FCurve *fcu)
 	 */
 	if (ELEM(NULL, fcu, fcu->bezt) || (a < 2) /*|| ELEM(fcu->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN)*/) 
 		return;
-
-	/* if the first modifier is Cycles, smooth the curve through the cycle */
-	BezTriple *first = &fcu->bezt[0], *last = &fcu->bezt[fcu->totvert-1];
-	BezTriple tmp;
-
-	bool cycle = detect_cycle_modifier(fcu) &&
-	             ELEM(first->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(first->h2, HD_AUTO, HD_AUTO_ANIM) &&
-	             ELEM(last->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(last->h2, HD_AUTO, HD_AUTO_ANIM);
-
+	
 	/* get initial pointers */
 	bezt = fcu->bezt;
-	prev = cycle ? cycle_offset_triple(&tmp, &fcu->bezt[fcu->totvert-2], last, first) : NULL;
+	prev = NULL;
 	next = (bezt + 1);
 	
 	/* loop over all beztriples, adjusting handles */
@@ -953,45 +910,24 @@ void calchandles_fcurve(FCurve *fcu)
 		if (bezt->vec[2][0] < bezt->vec[1][0]) bezt->vec[2][0] = bezt->vec[1][0];
 		
 		/* calculate auto-handles */
-		BKE_nurb_handle_calc_fcurve(bezt, prev, next, fcu->flag & FCURVE_AUTO_SMOOTHING);
+		BKE_nurb_handle_calc(bezt, prev, next, true);
 		
 		/* for automatic ease in and out */
-		if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(bezt->h2, HD_AUTO, HD_AUTO_ANIM) && !cycle) {
+		if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(bezt->h2, HD_AUTO, HD_AUTO_ANIM)) {
 			/* only do this on first or last beztriple */
 			if ((a == 0) || (a == fcu->totvert - 1)) {
 				/* set both handles to have same horizontal value as keyframe */
 				if (fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) {
 					bezt->vec[0][1] = bezt->vec[2][1] = bezt->vec[1][1];
-					/* remember that these keyframes are special, they don't need to be adjusted */
-					bezt->f5 = HD_AUTOTYPE_SPECIAL;
 				}
 			}
-		}
-
-		/* avoid total smoothing failure on duplicate keyframes (can happen during grab) */
-		if (prev && prev->vec[1][0] >= bezt->vec[1][0])	{
-			prev->f5 = bezt->f5 = HD_AUTOTYPE_SPECIAL;
 		}
 		
 		/* advance pointers for next iteration */
 		prev = bezt;
-		if (a == 1)
-			next = cycle ? cycle_offset_triple(&tmp, &fcu->bezt[1], first, last) : NULL;
+		if (a == 1) next = NULL;
 		else next++;
 		bezt++;
-	}
-
-	/* if cyclic extrapolation and Auto Clamp has triggered, ensure it is symmetric */
-	if (cycle && (first->f5 != HD_AUTOTYPE_NORMAL || last->f5 != HD_AUTOTYPE_NORMAL))
-	{
-		first->vec[0][1] = first->vec[2][1] = first->vec[1][1];
-		last->vec[0][1] = last->vec[2][1] = last->vec[1][1];
-		first->f5 = last->f5 = HD_AUTOTYPE_SPECIAL;
-	}
-
-	/* do a second pass for auto handle: compute the handle to have 0 accelaration step */
-	if (fcu->flag & FCURVE_AUTO_SMOOTHING) {
-		BKE_nurb_handle_smooth_all(fcu->bezt, fcu->totvert, cycle);
 	}
 }
 

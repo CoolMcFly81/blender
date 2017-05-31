@@ -3107,7 +3107,7 @@ void BKE_curve_bevelList_make(Object *ob, ListBase *nurbs, bool for_render)
 
 static void calchandleNurb_intern(
         BezTriple *bezt, const BezTriple *prev, const BezTriple *next,
-        bool is_fcurve, bool skip_align, bool fcurve_smoothing)
+        bool is_fcurve, bool skip_align)
 {
 	/* defines to avoid confusion */
 #define p2_h1 ((p2) - 3)
@@ -3120,9 +3120,6 @@ static void calchandleNurb_intern(
 	float len, len_a, len_b;
 	float len_ratio;
 	const float eps = 1e-5;
-
-	/* assume normal handle until we check */
-	bezt->f5 = HD_AUTOTYPE_NORMAL;
 
 	if (bezt->h1 == 0 && bezt->h2 == 0) {
 		return;
@@ -3175,13 +3172,7 @@ static void calchandleNurb_intern(
 		tvec[2] = dvec_b[2] / len_b + dvec_a[2] / len_a;
 
 		if (is_fcurve) {
-			if (fcurve_smoothing) {
-				/* force the handlers transition to be 1/3 */
-				len = 6.0f/2.5614f;
-			}
-			else {
-				len = tvec[0];
-			}
+			len = tvec[0];
 		}
 		else {
 			len = len_v3(tvec);
@@ -3192,12 +3183,10 @@ static void calchandleNurb_intern(
 			/* only for fcurves */
 			bool leftviolate = false, rightviolate = false;
 
-			if (!is_fcurve || !fcurve_smoothing) {
-				if (len_a > 5.0f * len_b)
-					len_a = 5.0f * len_b;
-				if (len_b > 5.0f * len_a)
-					len_b = 5.0f * len_a;
-			}
+			if (len_a > 5.0f * len_b)
+				len_a = 5.0f * len_b;
+			if (len_b > 5.0f * len_a)
+				len_b = 5.0f * len_a;
 
 			if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM)) {
 				len_a /= len;
@@ -3208,7 +3197,6 @@ static void calchandleNurb_intern(
 					float ydiff2 = next->vec[1][1] - bezt->vec[1][1];
 					if ((ydiff1 <= 0.0f && ydiff2 <= 0.0f) || (ydiff1 >= 0.0f && ydiff2 >= 0.0f)) {
 						bezt->vec[0][1] = bezt->vec[1][1];
-						bezt->f5 = HD_AUTOTYPE_SPECIAL;
 					}
 					else { /* handles should not be beyond y coord of two others */
 						if (ydiff1 <= 0.0f) {
@@ -3235,7 +3223,6 @@ static void calchandleNurb_intern(
 					float ydiff2 = next->vec[1][1] - bezt->vec[1][1];
 					if ( (ydiff1 <= 0.0f && ydiff2 <= 0.0f) || (ydiff1 >= 0.0f && ydiff2 >= 0.0f) ) {
 						bezt->vec[2][1] = bezt->vec[1][1];
-						bezt->f5 = HD_AUTOTYPE_SPECIAL;
 					}
 					else { /* handles should not be beyond y coord of two others */
 						if (ydiff1 <= 0.0f) {
@@ -3383,7 +3370,7 @@ static void calchandlesNurb_intern(Nurb *nu, bool skip_align)
 	next = bezt + 1;
 
 	while (a--) {
-		calchandleNurb_intern(bezt, prev, next, 0, skip_align, 0);
+		calchandleNurb_intern(bezt, prev, next, 0, skip_align);
 		prev = bezt;
 		if (a == 1) {
 			if (nu->flagu & CU_NURB_CYCLIC)
@@ -3398,525 +3385,9 @@ static void calchandlesNurb_intern(Nurb *nu, bool skip_align)
 	}
 }
 
-/*
- * This function computes the handles of a series of auto bezier points
- * on the basis of 'no acceleration discontinuities' at the points.
- * The first and last bezier points are considered 'fixed' (their handles are not touched)
- * The result is the smoothest possible trajectory going through intemediate points.
- * The difficulty is that the handles depends on their neighbours.
- *
- * The exact solution is found by solving a tridiagonal matrix equation formed
- * by the continuity and boundary conditions. Although theoretically handle position
- * is affected by all other points of the curve segment, in practice the influence
- * decreases exponentially with distance.
- *
- * Note: this algorithm assumes that the handle horizontal size if always 1/3 of the
- * of the interval to the next point. This rule ensures linear interpolation of time.
- *
- * ^ height (co 1)
- * |                                            yN
- * |                                   yN-1     |
- * |                      y2           |        |
- * |           y1         |            |        |
- * |    y0     |          |            |        |
- * |    |      |          |            |        |
- * |    |      |          |            |        |
- * |    |      |          |            |        |
- * |-------t1---------t2--------- ~ --------tN-------------------> time (co 0)
- *
- *
- * Mathematical basis:
- *
- *   1. Handle lengths on either side of each point are connected by a factor
- *      ensuring continuity of the first derivative:
- *
- *      l[i] = t[i+1]/t[i]
- *
- *   2. The tridiagonal system is formed by the following equation, which is derived
- *      by differentiating the bezier curve and specifies second derivative continuity
- *      at every point:
- *
- *      l[i]^2 * h[i-1] + (2*l[i]+2) * h[i] + 1/l[i+1] * h[i+1] = (y[i]-y[i-1])*l[i]^2 + y[i+1]-y[i]
- *
- *   3. If this point is adjacent to a manually set handle with X size not equal to 1/3
- *      of the horizontal interval, this equation becomes slightly more complex:
- *
- *      l[i]^2 * h[i-1] + (3*(1-R[i-1])*l[i] + 3*(1-L[i+1])) * h[i] + 1/l[i+1] * h[i+1] = (y[i]-y[i-1])*l[i]^2 + y[i+1]-y[i]
- *
- *      The difference between equations amounts to this, and it's obvious that when R[i-1]
- *      and L[i+1] are both 1/3, it becomes zero:
- *
- *      ( (1-3*R[i-1])*l[i] + (1-3*L[i+1]) ) * h[i]
- *
- *   4. The equations for zero acceleration border conditions are basically the above
- *      equation with parts omitted, so the handle size correction also applies.
- */
-
-static void nurb_lock_unknown(float *a, float *b, float *c, float *d, int i, float value)
+void BKE_nurb_handle_calc(BezTriple *bezt, BezTriple *prev, BezTriple *next, const bool is_fcurve)
 {
-	a[i] = c[i] = 0.0f;
-	b[i] = 1.0f;
-	d[i] = value;
-}
-
-static void nurb_eq_continuous(float *a, float *b, float *c, float *d, float *y, float *l, int i)
-{
-	a[i] = l[i]*l[i];
-	b[i] = 2.0f*(l[i] + 1);
-	c[i] = 1.0f/l[i+1];
-	d[i] = (y[i]-y[i-1])*l[i]*l[i] + (y[i+1]-y[i]);
-}
-
-static void nurb_eq_noaccel_right(float *a, float *b, float *c, float *d, float *y, float *l, int i)
-{
-	a[i] = 0.0f;
-	b[i] = 2.0f;
-	c[i] = 1.0f/l[i+1];
-	d[i] = y[i+1]-y[i];
-}
-
-static void nurb_eq_noaccel_left(float *a, float *b, float *c, float *d, float *y, float *l, int i)
-{
-	a[i] = l[i]*l[i];
-	b[i] = 2.0f*l[i];
-	c[i] = 0.0f;
-	d[i] = (y[i]-y[i-1])*l[i]*l[i];
-}
-
-#if 0
-static void nurb_eq_constaccel_right(float *a, float *b, float *c, float *d, float *y, float *l, int i)
-{
-	a[i] = 0.0f;
-	b[i] = 3.0f*l[i+1];
-	c[i] = 3.0f;
-	d[i] = 2.0f*(y[i+1]-y[i])*l[i+1];
-}
-
-static void nurb_eq_constaccel_left(float *a, float *b, float *c, float *d, float *y, float *l, int i)
-{
-	a[i] = 3.0f*l[i];
-	b[i] = 3.0f;
-	c[i] = 0.0f;
-	d[i] = 2.0f*(y[i]-y[i-1])*l[i];
-}
-#endif
-
-/* auto clamp prevents its own point going the wrong way, and adjacent handles overshooting */
-static void nurb_clamp(float *hmax, float *hmin, int i, float dy, bool no_reverse, bool no_overshoot)
-{
-	if (dy > 0)
-	{
-		if (no_overshoot)
-			hmax[i] = min_ff(hmax[i], dy);
-		if (no_reverse)
-			hmin[i] = 0.0f;
-	}
-	else if (dy < 0)
-	{
-		if (no_reverse)
-			hmax[i] = 0.0f;
-		if (no_overshoot)
-			hmin[i] = max_ff(hmin[i], dy);
-	}
-	else if (no_reverse || no_overshoot)
-	{
-		hmax[i] = hmin[i] = 0.0f;
-	}
-}
-
-/* computes in which direction to change h[i] to satisfy conditions better */
-static float nurb_relax_direction(float *a, float *b, float *c, float *d, float *h, int i, int count)
-{
-	/* current deviation between sides of the equation */
-	float state = a[i] * h[(i+count-1)%count] + b[i] * h[i] + c[i] * h[(i+1)%count] - d[i];
-
-	/* only the sign is meaningful */
-	return -state * b[i];
-}
-
-/* write changes to a bezier handle */
-static void nurb_output_handle(BezTriple *bezt, bool right, float dy, bool endpoint)
-{
-	int idx = right ? 2 : 0;
-	char hr = right ? bezt->h2 : bezt->h1;
-	char hm = right ? bezt->h1 : bezt->h2;
-
-	/* only assign Auto/Vector handles */
-	if (!ELEM(hr, HD_AUTO, HD_AUTO_ANIM, HD_VECT))
-		return;
-
-	bezt->vec[idx][1] = bezt->vec[1][1] + dy;
-
-	/* fix up the Align handle if any */
-	if (ELEM(hm, HD_ALIGN, HD_ALIGN_DOUBLESIDE))
-	{
-		float hlen = len_v2v2(bezt->vec[1], bezt->vec[2-idx]);
-		float h2len = len_v2v2(bezt->vec[1], bezt->vec[idx]);
-		float tmp[2];
-
-		sub_v2_v2v2(tmp, bezt->vec[1], bezt->vec[idx]);
-		madd_v2_v2v2fl(bezt->vec[2-idx], bezt->vec[1], tmp, hlen/h2len);
-	}
-	/* at end points of the curve, mirror handle to the other side */
-	else if (endpoint && ELEM(hm, HD_AUTO, HD_AUTO_ANIM, HD_VECT))
-	{
-		float midx = bezt->vec[1][0];
-		float ratio = (bezt->vec[2-idx][0] - midx) / (bezt->vec[idx][0] - midx);
-
-		bezt->vec[2-idx][1] = bezt->vec[1][1] + dy * ratio;
-	}
-}
-
-static bool nurb_check_solve_end_handle(BezTriple *bezt, char htype, bool end)
-{
-	return (htype == HD_VECT) || (end && ELEM(htype, HD_AUTO, HD_AUTO_ANIM) && bezt->f5 == HD_AUTOTYPE_NORMAL);
-}
-
-static float nurb_calc_handle_adj(float hsize[2], float dx)
-{
-	/* if handles intersect in x direction, they are scaled to fit */
-	float fac = dx/(hsize[0] + dx/3.0f);
-	if (fac < 1.0f)
-		mul_v2_fl(hsize, fac);
-
-	return 1.0f - 3.0f*hsize[0]/dx;
-}
-
-static void nurb_handle_calc_smooth(BezTriple *bezt, int total, int start, int count, bool cycle)
-{
-	float *x, *y, *l, *a, *b, *c, *d, *h, *hmax, *hmin, *a0, *b0, *c0, *d0;
-	float **arrays[] = { &x, &y, &l, &a, &b, &c, &d, &h, &hmax, &hmin, &a0, &b0, &c0, &d0 };
-	char *is_locked, *num_unlocks;
-	char **flagarrays[] = { &is_locked, &num_unlocks };
-	const int num_arrays = sizeof(arrays)/sizeof(float**), num_flagarrays = sizeof(flagarrays)/sizeof(char**);
-
-	int solve_count = count;
-
-	/* verify index ranges */
-
-	if (count < 2)
-		return;
-
-	BLI_assert(start < total-1 && count <= total);
-	BLI_assert(start + count <= total || cycle);
-
-	bool full_cycle = (start == 0 && count == total && cycle);
-
-	BezTriple *bezt_first = &bezt[start];
-	BezTriple *bezt_last = &bezt[(start+count > total) ? start+count-total : start+count-1];
-
-	bool solve_first = nurb_check_solve_end_handle(bezt_first, bezt_first->h2, start==0);
-	bool solve_last = nurb_check_solve_end_handle(bezt_last, bezt_last->h1, start+count==total);
-
-	if (count == 2 && !full_cycle && solve_first == solve_last)
-	    return;
-
-	/* allocate all */
-
-	float *tmp_buffer = (float *)MEM_mallocN(sizeof(float)*count*num_arrays + count*num_flagarrays, "nurb_calc_smooth_tmp");
-
-	if (!tmp_buffer)
-		return;
-
-	for (int i = 0; i < num_arrays; i++)
-		*arrays[i] = tmp_buffer + i * count;
-
-	char *flag_buffer = (char*)(tmp_buffer + num_arrays * count);
-
-	for (int i = 0; i < num_flagarrays; i++)
-		*flagarrays[i] = flag_buffer + i * count;
-
-	/* point locations */
-
-	float offset[2] = { 0.0f, 0.0f };
-
-	for (int i = 0, j = start; i < count; i++, j++)
-	{
-		/* when cyclic, jump from last point to first and remember offset */
-		if (cycle && j == total-1)
-		{
-			add_v2_v2(offset, bezt[j].vec[1]);
-			sub_v2_v2(offset, bezt[0].vec[1]);
-
-			j = 0;
-		}
-
-		x[i] = bezt[j].vec[1][0] + offset[0];
-		y[i] = bezt[j].vec[1][1] + offset[1];
-		hmax[i] = FLT_MAX;
-		hmin[i] = -FLT_MAX;
-		is_locked[i] = num_unlocks[i] = 0;
-	}
-
-	/* ratio of x intervals */
-
-	l[0] = l[count-1] = 1.0f;
-
-	for (int i = 1; i < count-1; i++)
-	{
-		l[i] = (x[i+1] - x[i]) / (x[i] - x[i-1]);
-	}
-
-	/* compute handle clamp ranges */
-
-	bool clamped_prev = false, clamped_cur = ELEM(HD_AUTO_ANIM, bezt_first->h1, bezt_first->h2);
-
-	for (int i = 1, j = start+1; i < count; i++, j++)
-	{
-		clamped_prev = clamped_cur;
-		clamped_cur = ELEM(HD_AUTO_ANIM, bezt[j].h1, bezt[j].h2);
-
-		if (cycle && j == total-1)
-		{
-			j = 0;
-			clamped_cur = clamped_cur || ELEM(HD_AUTO_ANIM, bezt[j].h1, bezt[j].h2);
-		}
-
-		float delta = y[i] - y[i-1];
-
-		nurb_clamp(hmax, hmin, i-1, delta, clamped_prev, clamped_prev);
-		nurb_clamp(hmax, hmin, i, delta * l[i], clamped_cur, clamped_cur);
-	}
-
-	/* full cycle merges first and last points into continuous loop */
-
-	float first_handle_adj = 0.0f, last_handle_adj = 0.0f;
-
-	if (full_cycle)
-	{
-		/* reduce the number of uknowns by one */
-		int i = solve_count = count-1;
-
-		l[0] = l[i] = (x[1] - x[0]) / (x[i] - x[i-1]);
-
-		hmin[0] = max_ff(hmin[0], hmin[i]);
-		hmax[0] = min_ff(hmax[0], hmax[i]);
-
-		solve_first = solve_last = true;
-
-		a[0] = l[0]*l[0];
-		b[0] = 2.0f*(l[0] + 1);
-		c[0] = 1.0f/l[1];
-		d[0] = (y[i]-y[i-1])*l[0]*l[0] + (y[1]-y[0]);
-	}
-	else
-	{
-		float tmp[2];
-
-		/* boundary condition: fixed handles or zero curvature */
-		if (!solve_first)
-		{
-			sub_v2_v2v2(tmp, bezt_first->vec[2], bezt_first->vec[1]);
-			first_handle_adj = nurb_calc_handle_adj(tmp, x[1] - x[0]);
-
-			nurb_lock_unknown(a, b, c, d, 0, tmp[1]);
-		}
-		/*else if (start != 0 && ELEM(bezt_first->h2, HD_AUTO, HD_AUTO_ANIM))
-			nurb_eq_constaccel_right(a, b, c, d, y, l, 0);*/
-		else
-			nurb_eq_noaccel_right(a, b, c, d, y, l, 0);
-
-		if (!solve_last)
-		{
-			sub_v2_v2v2(tmp, bezt_last->vec[1], bezt_last->vec[0]);
-			last_handle_adj = nurb_calc_handle_adj(tmp, x[count-1] - x[count-2]);
-
-			nurb_lock_unknown(a, b, c, d, count-1, tmp[1]);
-		}
-		/*else if (start+count != total && ELEM(bezt_last->h1, HD_AUTO, HD_AUTO_ANIM))
-			nurb_eq_constaccel_left(a, b, c, d, y, l, count-1);*/
-		else
-			nurb_eq_noaccel_left(a, b, c, d, y, l, count-1);
-	}
-
-	/* main tridiagonal system of equations */
-
-	for (int i = 1; i < count-1; i++)
-	{
-		nurb_eq_continuous(a, b, c, d, y, l, i);
-	}
-
-	/* apply correction for user-defined handles with nonstandard x positions */
-
-	if (!full_cycle)
-	{
-		if (count > 2 || solve_last)
-			b[1] += l[1]*first_handle_adj;
-
-		if (count > 2 || solve_first)
-			b[count-2] += last_handle_adj;
-	}
-
-	/* solve and clamp until done */
-
-	memcpy(a0, a, sizeof(float)*count);
-	memcpy(b0, b, sizeof(float)*count);
-	memcpy(c0, c, sizeof(float)*count);
-	memcpy(d0, d, sizeof(float)*count);
-
-	bool overshoot, unlocked, fail = false;
-
-	do
-	{
-		if (!BLI_tridiagonal_solve_cyclic(a, b, c, d, h, solve_count))
-		{
-			fail = true;
-			break;
-		}
-
-		/* first check if any handles overshoot the limits, and lock them */
-		bool all = false, locked = false;
-
-		overshoot = unlocked = false;
-
-		do
-		{
-			for (int i = 0; i < solve_count; i++)
-			{
-				if (h[i] >= hmin[i] && h[i] <= hmax[i])
-					continue;
-
-				overshoot = true;
-
-				float target = h[i] > hmax[i] ? hmax[i] : hmin[i];
-
-				/* heuristically only lock handles that go in the right direction if there are such ones */
-				if (target != 0.0f || all)
-				{
-					/* mark item locked */
-					is_locked[i] = 1;
-
-					nurb_lock_unknown(a, b, c, d, i, target);
-					locked = true;
-				}
-			}
-
-			all = true;
-		}
-		while (overshoot && !locked);
-
-		/* if no handles overshot and were locked, see if it may be a good idea to unlock some handles */
-		if (!locked)
-		{
-			for (int i = 0; i < solve_count; i++)
-			{
-				// to definitely avoid infinite loops limit this to 2 times
-				if (!is_locked[i] || num_unlocks[i] >= 2)
-					continue;
-
-				/* if the handle wants to move in allowable direction, release it */
-				float relax = nurb_relax_direction(a0, b0, c0, d0, h, i, solve_count);
-
-				if ((relax > 0 && h[i] < hmax[i]) || (relax < 0 && h[i] > hmin[i]))
-				{
-					/* restore equation coefficients */
-					a[i] = a0[i]; b[i] = b0[i]; c[i] = c0[i]; d[i] = d0[i];
-
-					is_locked[i] = 0;
-					num_unlocks[i]++;
-					unlocked = true;
-				}
-			}
-		}
-	}
-	while (overshoot || unlocked);
-
-	/* output results */
-
-	if (!fail)
-	{
-		if (full_cycle)
-			h[count-1] = h[0];
-
-		for (int i = 1, j = start+1; i < count-1; i++, j++)
-		{
-			bool end = (j == total-1);
-
-			nurb_output_handle(&bezt[j], false, - h[i] / l[i], end);
-
-			if (end)
-				j = 0;
-
-			nurb_output_handle(&bezt[j], true, h[i], end);
-		}
-
-		if (solve_first)
-			nurb_output_handle(bezt_first, true, h[0], start == 0);
-
-		if (solve_last)
-			nurb_output_handle(bezt_last, false, - h[count-1] / l[count-1], start+count == total);
-	}
-
-	/* free all */
-
-	MEM_freeN(tmp_buffer);
-}
-
-static bool is_free_auto_point(BezTriple *bezt)
-{
-	return ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(bezt->h2, HD_AUTO, HD_AUTO_ANIM) && bezt->f5 == HD_AUTOTYPE_NORMAL;
-}
-
-void BKE_nurb_handle_smooth_all(BezTriple *bezt, int total, bool cycle)
-{
-	/* ignore cyclic extrapolation if end points are locked */
-	cycle = cycle && is_free_auto_point(&bezt[0]) && is_free_auto_point(&bezt[total-1]);
-
-	/* if cyclic, try to find a sequence break point */
-	int search_base = 0;
-
-	if (cycle)
-	{
-		for (int i = 1; i < total-1; i++)
-		{
-			if (!is_free_auto_point(&bezt[i]))
-			{
-				search_base = i;
-				break;
-			}
-		}
-
-		/* all points of the curve are freely changeable auto handles - solve as full cycle */
-		if (search_base == 0)
-		{
-			nurb_handle_calc_smooth(bezt, total, 0, total, cycle);
-			return;
-		}
-	}
-
-	/* Find continuous subsequences of free auto handles and smooth them, starting at
-	 * search_base. In cyclic mode these subsequences can span the cycle boundary. */
-	int start = search_base, count = 1;
-
-	for (int i = 1, j = start+1; i < total; i++, j++)
-	{
-		/* in cyclic mode: jump from last to first point when necessary */
-		if (j == total-1 && cycle)
-			j = 0;
-
-		/* non auto handle closes the list (we come here at least for the last handle, see above) */
-		if (!is_free_auto_point(&bezt[j]))
-		{
-			nurb_handle_calc_smooth(bezt, total, start, count+1, cycle);
-			start = j;
-			count = 1;
-		}
-		else
-			count++;
-	}
-
-	if (count > 1)
-		nurb_handle_calc_smooth(bezt, total, start, count, cycle);
-}
-
-void BKE_nurb_handle_calc(BezTriple *bezt, BezTriple *prev, BezTriple *next)
-{
-	calchandleNurb_intern(bezt, prev, next, false, false, false);
-}
-
-void BKE_nurb_handle_calc_fcurve(BezTriple *bezt, BezTriple *prev, BezTriple *next, const bool smoothing)
-{
-	calchandleNurb_intern(bezt, prev, next, true, false, smoothing);
+	calchandleNurb_intern(bezt, prev, next, is_fcurve, false);
 }
 
 void BKE_nurb_handles_calc(Nurb *nu) /* first, if needed, set handle flags */
@@ -3956,7 +3427,7 @@ void BKE_nurb_handle_calc_simple(Nurb *nu, BezTriple *bezt)
 	if (nu->pntsu > 1) {
 		BezTriple *prev = BKE_nurb_bezt_get_prev(nu, bezt);
 		BezTriple *next = BKE_nurb_bezt_get_next(nu, bezt);
-		BKE_nurb_handle_calc(bezt, prev, next);
+		BKE_nurb_handle_calc(bezt, prev, next, 0);
 	}
 }
 

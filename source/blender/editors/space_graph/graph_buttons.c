@@ -208,10 +208,7 @@ static void graph_panel_properties(const bContext *C, Panel *pa)
 	sub = uiLayoutRow(row, true);
 	uiLayoutSetEnabled(sub, (fcu->color_mode == FCURVE_COLOR_CUSTOM));
 	uiItemR(sub, &fcu_ptr, "color", 0, "", ICON_NONE);
-
-	/* smoothing setting */
-	uiItemR(layout, &fcu_ptr, "auto_smoothing", 0, NULL, ICON_NONE);
-
+	
 	MEM_freeN(ale);
 }
 
