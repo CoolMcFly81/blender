@@ -18,9 +18,10 @@
 #include "kernel/split/kernel_split_common.h"
 #include "kernel/split/kernel_queue_enqueue.h"
 
-#define KERNEL_NAME queue_enqueue
-#define LOCALS_TYPE QueueEnqueueLocals
-#include "kernel/kernels/opencl/kernel_split_function.h"
-#undef KERNEL_NAME
-#undef LOCALS_TYPE
-
+__kernel void kernel_ocl_path_trace_queue_enqueue(
+        ccl_global char *kg,
+        ccl_constant KernelData *data)
+{
+	ccl_local QueueEnqueueLocals locals;
+	kernel_queue_enqueue((KernelGlobals*)kg, &locals);
+}

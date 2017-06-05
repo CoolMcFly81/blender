@@ -18,7 +18,9 @@
 #include "kernel/split/kernel_split_common.h"
 #include "kernel/split/kernel_shadow_blocked_ao.h"
 
-#define KERNEL_NAME shadow_blocked_ao
-#include "kernel/kernels/opencl/kernel_split_function.h"
-#undef KERNEL_NAME
-
+__kernel void kernel_ocl_path_trace_shadow_blocked_ao(
+        ccl_global char *kg,
+        ccl_constant KernelData *data)
+{
+	kernel_shadow_blocked_ao((KernelGlobals*)kg);
+}

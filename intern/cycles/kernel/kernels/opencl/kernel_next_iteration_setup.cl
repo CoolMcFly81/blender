@@ -18,9 +18,10 @@
 #include "kernel/split/kernel_split_common.h"
 #include "kernel/split/kernel_next_iteration_setup.h"
 
-#define KERNEL_NAME next_iteration_setup
-#define LOCALS_TYPE unsigned int
-#include "kernel/kernels/opencl/kernel_split_function.h"
-#undef KERNEL_NAME
-#undef LOCALS_TYPE
-
+__kernel void kernel_ocl_path_trace_next_iteration_setup(
+        ccl_global char *kg,
+        ccl_constant KernelData *data)
+{
+	ccl_local unsigned int local_queue_atomics;
+	kernel_next_iteration_setup((KernelGlobals*)kg, &local_queue_atomics);
+}
