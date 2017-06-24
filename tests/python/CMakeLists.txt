@@ -104,15 +104,15 @@ add_test(bevel ${TEST_BLENDER_EXE}
 )
 
 add_test(split_faces ${TEST_BLENDER_EXE}
-    ${TEST_SRC_DIR}/modeling/split_faces_test.blend
-    --python-text run_tests
+	${TEST_SRC_DIR}/modeling/split_faces_test.blend
+	--python-text run_tests
 )
 
 # ------------------------------------------------------------------------------
 # MODIFIERS TESTS
 add_test(modifier_array ${TEST_BLENDER_EXE}
-    ${TEST_SRC_DIR}/modifier_stack/array_test.blend
-    --python-text run_tests
+	${TEST_SRC_DIR}/modifier_stack/array_test.blend
+	--python-text run_tests
 )
 
 # ------------------------------------------------------------------------------
@@ -468,12 +468,13 @@ if(WITH_ALEMBIC)
 			--testdir "${TEST_SRC_DIR}/alembic"
 			--alembic-root "${ALEMBIC_ROOT_DIR}"
 		)
-		add_test(NAME script_alembic_import 
-			COMMAND 
-			"$<TARGET_FILE:blender>" ${TEST_BLENDER_EXE_PARAMS} 
+		add_test(NAME script_alembic_import
+			COMMAND
+			"$<TARGET_FILE:blender>" ${TEST_BLENDER_EXE_PARAMS}
 		--python ${CMAKE_CURRENT_LIST_DIR}/bl_alembic_import_test.py
 		--
 		--testdir "${TEST_SRC_DIR}/alembic"
+		--with-legacy-depsgraph=${WITH_LEGACY_DEPSGRAPH}
 		)
 
 	else()
@@ -487,6 +488,7 @@ if(WITH_ALEMBIC)
 		--python ${CMAKE_CURRENT_LIST_DIR}/bl_alembic_import_test.py
 		--
 		--testdir "${TEST_SRC_DIR}/alembic"
+		--with-legacy-depsgraph=${WITH_LEGACY_DEPSGRAPH}
 		)
 
 	endif()

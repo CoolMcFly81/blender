@@ -33,10 +33,10 @@
 #include <stdio.h>
 #include <cstring>  /* required for STREQ later on. */
 
-extern "C" {
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
+extern "C" {
 #include "DNA_object_types.h"
 
 #include "BKE_action.h"
@@ -198,7 +198,7 @@ OperationDepsNode *ComponentDepsNode::has_operation(eDepsOperation_Code opcode,
 	return has_operation(key);
 }
 
-OperationDepsNode *ComponentDepsNode::add_operation(DepsEvalOperationCb op,
+OperationDepsNode *ComponentDepsNode::add_operation(const DepsEvalOperationCb& op,
                                                     eDepsOperation_Code opcode,
                                                     const char *name,
                                                     int name_tag)

@@ -34,12 +34,6 @@
 
 // #define DEBUG_TIME
 
-extern "C" {
-#include "DNA_cachefile_types.h"
-#include "DNA_object_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_object_force.h"
-
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
@@ -48,16 +42,21 @@ extern "C" {
 #  include "PIL_time_utildefines.h"
 #endif
 
+extern "C" {
+#include "DNA_cachefile_types.h"
+#include "DNA_object_types.h"
+#include "DNA_scene_types.h"
+#include "DNA_object_force.h"
+
 #include "BKE_main.h"
 #include "BKE_collision.h"
 #include "BKE_effect.h"
 #include "BKE_modifier.h"
+} /* extern "C" */
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_debug.h"
 #include "DEG_depsgraph_build.h"
-
-} /* extern "C" */
 
 #include "builder/deg_builder.h"
 #include "builder/deg_builder_cycle.h"
@@ -167,6 +166,13 @@ void DEG_add_bone_relation(DepsNodeHandle *handle,
 	                                              description);
 }
 
+struct Depsgraph *DEG_get_graph_from_handle(struct DepsNodeHandle *handle)
+{
+	DEG::DepsNodeHandle *deg_handle = get_handle(handle);
+	DEG::DepsgraphRelationBuilder *relation_builder = deg_handle->builder;
+	return reinterpret_cast<Depsgraph *>(relation_builder->getGraph());
+}
+
 void DEG_add_special_eval_flag(Depsgraph *graph, ID *id, short flag)
 {
 	DEG::Depsgraph *deg_graph = reinterpret_cast<DEG::Depsgraph *>(graph);
@@ -201,23 +207,13 @@ void DEG_graph_build_from_scene(Depsgraph *graph, Main *bmain, Scene *scene)
 
 	/* 1) Generate all the nodes in the graph first */
 	DEG::DepsgraphNodeBuilder node_builder(bmain, deg_graph);
-	/* create root node for scene first
-	 * - this way it should be the first in the graph,
-	 *   reflecting its role as the entrypoint
-	 */
 	node_builder.begin_build(bmain);
-	node_builder.add_root_node();
 	node_builder.build_scene(bmain, scene);
 
 	/* 2) Hook up relationships between operations - to determine evaluation
 	 *    order.
 	 */
 	DEG::DepsgraphRelationBuilder relation_builder(deg_graph);
-	/* Hook scene up to the root node as entrypoint to graph. */
-	/* XXX what does this relation actually mean?
-	 * it doesnt add any operations anyway and is not clear what part of the
-	 * scene is to be connected.
-	 */
 	relation_builder.begin_build(bmain);
 	relation_builder.build_scene(bmain, scene);
 
