@@ -58,7 +58,14 @@ static void find_nearest_points_test(int points_len, float scale, int round, int
 {
 	struct RNG *rng = BLI_rng_new(random_seed);
 	BVHTree *tree = BLI_bvhtree_new(points_len, 0.0, 8, 8);
+<<<<<<< HEAD
 	float (*points)[3] = (float (*)[3])MEM_mallocN(sizeof(float[3]) * points_len, __func__);
+=======
+
+	void *mem = MEM_mallocN(sizeof(float[3]) * points_len, __func__);
+	float (*points)[3] = (float (*)[3])mem;
+
+>>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 	for (int i = 0; i < points_len; i++) {
 		rng_v3_round(points[i], 3, rng, round, scale);
 		BLI_bvhtree_insert(tree, i, points[i], 1);
