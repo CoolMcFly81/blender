@@ -51,6 +51,19 @@ def draw_keyframing_tools(context, layout):
     row.operator("anim.keyframe_delete_v3d", text="Remove")
 
 
+# Used by vertex & weight paint
+def draw_vpaint_symmetry(layout, vpaint):
+    col = layout.column(align=True)
+    col.label(text="Mirror:")
+    row = col.row(align=True)
+
+    row.prop(vpaint, "use_symmetry_x", text="X", toggle=True)
+    row.prop(vpaint, "use_symmetry_y", text="Y", toggle=True)
+    row.prop(vpaint, "use_symmetry_z", text="Z", toggle=True)
+
+    col = layout.column()
+    col.prop(vpaint, "radial_symmetry", text="Radial")
+
 # ********** default tools for object-mode ****************
 
 
@@ -1134,7 +1147,11 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
             self.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
             if settings.palette:
                 col.template_palette(settings, "palette", color=True)
-            self.prop_unified_color(col, context, brush, "color", text="")
+            row = col.row(align=True)
+            self.prop_unified_color(row, context, brush, "color", text="")
+            self.prop_unified_color(row, context, brush, "secondary_color", text="")
+            row.separator()
+            row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
 
             col.separator()
             row = col.row(align=True)
@@ -1150,7 +1167,22 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
             # row.prop(brush, "jitter", slider=True)
             # row.prop(brush, "use_pressure_jitter", toggle=True, text="")
             col.separator()
+            #color lock
+            col.label(text="Lock Color:")
+            row= col.row(align= True)
+            toolsettings = context.tool_settings
+            vpaint = toolsettings.vertex_paint
+            row.prop(vpaint,"color_lock_r",text="R",toggle= True)
+            row.prop(vpaint,"color_lock_g",text="G",toggle= True)
+            row.prop(vpaint,"color_lock_b",text="B",toggle= True)
+            row.prop(vpaint,"color_lock_a",text="A",toggle= True)
+            col.separator()
             col.prop(brush, "vertex_tool", text="Blend")
+            col.prop(brush,"use_accumulate")
+            col.prop(brush,"use_alpha_vpaint")
+            sub = col.column()
+            sub.active = brush.use_alpha_vpaint
+            sub.prop(brush, "alpha_vpaint", text="Alpha", slider=True)
 
             col.separator()
             col.template_ID(settings, "palette", new="palette.new")
@@ -1717,6 +1749,19 @@ class VIEW3D_PT_tools_weightpaint(View3DPanel, Panel):
         props.data_type = 'VGROUP_WEIGHTS'
 
 
+class VIEW3D_PT_tools_weightpaint_symmetry(Panel, View3DPaintPanel):
+    bl_category = "Tools"
+    bl_context = "weightpaint"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_label = "Symmetry"
+
+    def draw(self, context):
+        layout = self.layout
+        toolsettings = context.tool_settings
+        wpaint = toolsettings.weight_paint
+        draw_vpaint_symmetry(layout, wpaint)
+
+
 class VIEW3D_PT_tools_weightpaint_options(Panel, View3DPaintPanel):
     bl_category = "Options"
     bl_context = "weightpaint"
@@ -1732,6 +1777,7 @@ class VIEW3D_PT_tools_weightpaint_options(Panel, View3DPaintPanel):
         row = col.row()
 
         row.prop(wpaint, "use_normal")
+        row.prop(wpaint, "use_occlude")
         col = layout.column()
         row = col.row()
         row.prop(wpaint, "use_spray")
@@ -1770,6 +1816,7 @@ class VIEW3D_PT_tools_vertexpaint(Panel, View3DPaintPanel):
         # col.prop(vpaint, "mode", text="")
         row.prop(vpaint, "use_normal")
         col.prop(vpaint, "use_spray")
+        col.prop(vpaint, "use_occlude")
 
         self.unified_paint_settings(col, context)
 
@@ -1778,6 +1825,20 @@ class VIEW3D_PT_tools_vertexpaint(Panel, View3DPaintPanel):
 #~         col.prop(vpaint, "gamma", text="")
 #~         col.label(text="Multiply:")
 #~         col.prop(vpaint, "mul", text="")
+
+
+class VIEW3D_PT_tools_vertexpaint_symmetry(Panel, View3DPaintPanel):
+    bl_category = "Tools"
+    bl_context = "vertexpaint"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_label = "Symmetry"
+
+    def draw(self, context):
+        layout = self.layout
+        toolsettings = context.tool_settings
+        vpaint = toolsettings.vertex_paint
+        draw_vpaint_symmetry(layout, vpaint)
+
 
 # ********** default tools for texture-paint ****************
 
@@ -2058,8 +2119,10 @@ classes = (
     VIEW3D_PT_sculpt_symmetry,
     VIEW3D_PT_tools_brush_appearance,
     VIEW3D_PT_tools_weightpaint,
+    VIEW3D_PT_tools_weightpaint_symmetry,
     VIEW3D_PT_tools_weightpaint_options,
     VIEW3D_PT_tools_vertexpaint,
+    VIEW3D_PT_tools_vertexpaint_symmetry,
     VIEW3D_PT_tools_imagepaint_external,
     VIEW3D_PT_tools_imagepaint_symmetry,
     VIEW3D_PT_tools_projectpaint,
