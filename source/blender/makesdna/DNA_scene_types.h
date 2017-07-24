@@ -1163,6 +1163,9 @@ typedef struct VPaint {
 	struct MDeformVert *wpaint_prev;	/* previous vertex weights */
 	
 	void *paintcursor;					/* wm handle */
+
+	int radial_symm[3]; /* For mirrored painting */
+	int pad2;
 } VPaint;
 
 /* VPaint.flag */
@@ -1172,7 +1175,13 @@ enum {
 	VP_NORMALS      = (1 << 3),
 	VP_SPRAY        = (1 << 4),
 	// VP_MIRROR_X  = (1 << 5),  /* deprecated in 2.5x use (me->editflag & ME_EDIT_MIRROR_X) */
-	VP_ONLYVGROUP   = (1 << 7)   /* weight paint only */
+	VP_OCCLUDE      = (1 << 6),
+	VP_ONLYVGROUP   = (1 << 7),  /* weight paint only */
+	/*color lock vpaint only*/
+	VP_LOCK_R       = (1 << 8),
+	VP_LOCK_G       = (1 << 9),
+	VP_LOCK_B	    = (1 << 10),
+	VP_LOCK_A	    = (1 << 11),
 };
 
 /* ------------------------------------------- */

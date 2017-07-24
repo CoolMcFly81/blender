@@ -94,6 +94,19 @@ EnumPropertyItem rna_enum_brush_vertex_tool_items[] = {
 	{PAINT_BLEND_BLUR, "BLUR", ICON_BRUSH_BLUR, "Blur", "Blur the color with surrounding values"},
 	{PAINT_BLEND_LIGHTEN, "LIGHTEN", ICON_BRUSH_LIGHTEN, "Lighten", "Use lighten blending mode while painting"},
 	{PAINT_BLEND_DARKEN, "DARKEN", ICON_BRUSH_DARKEN, "Darken", "Use darken blending mode while painting"},
+	{PAINT_BLEND_AVERAGE, "AVERAGE", ICON_BRUSH_BLUR, "Average", "Use average blending mode while painting"},
+	{PAINT_BLEND_SMEAR, "SMEAR", ICON_BRUSH_BLUR, "Smear", "Use smear blending mode while painting"},
+	{PAINT_BLEND_COLORDODGE, "COLORDODGE", ICON_BRUSH_BLUR, "Color Dodge", "Use color dodge blending mode while painting" },
+	{PAINT_BLEND_DIFFERENCE, "DIFFERENCE", ICON_BRUSH_BLUR, "Difference", "Use difference blending mode while painting"},
+	{PAINT_BLEND_SCREEN, "SCREEN", ICON_BRUSH_BLUR, "Screen", "Use screen blending mode while painting"},
+	{PAINT_BLEND_HARDLIGHT, "HARDLIGHT", ICON_BRUSH_BLUR, "Hardlight", "Use hardlight blending mode while painting"},
+	{PAINT_BLEND_OVERLAY, "OVERLAY", ICON_BRUSH_BLUR, "Overlay", "Use overlay blending mode while painting"},
+	{PAINT_BLEND_SOFTLIGHT, "SOFTLIGHT", ICON_BRUSH_BLUR, "Softlight", "Use softlight blending mode while painting"},
+	{PAINT_BLEND_EXCLUSION, "EXCLUSION", ICON_BRUSH_BLUR, "Exclusion", "Use exclusion blending mode while painting"},
+	{PAINT_BLEND_LUMINOCITY, "LUMINOCITY", ICON_BRUSH_BLUR, "Luminocity", "Use luminocity blending mode while painting"},
+	{PAINT_BLEND_SATURATION, "SATURATION", ICON_BRUSH_BLUR, "Saturation", "Use saturation blending mode while painting"},
+	{PAINT_BLEND_HUE, "HUE", ICON_BRUSH_BLUR, "Hue", "Use hue blending mode while painting"},
+
 	{0, NULL, 0, NULL, NULL}
 };
 	
@@ -1105,6 +1118,13 @@ static void rna_def_brush(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Blur Mode", "");
 	RNA_def_property_update(prop, 0, "rna_Brush_update");
 
+	prop = RNA_def_property(srna, "alpha_vpaint", PROP_INT, PROP_NONE);
+	RNA_def_property_range(prop, 0, 255);
+	RNA_def_property_int_sdna(prop, NULL, "alpha_paint");
+	RNA_def_property_range(prop, 0, 255);
+	RNA_def_property_ui_text(prop, "Alpha", "Alpha value");
+	RNA_def_property_update(prop, 0, "rna_Brush_update");
+	
 	/* flag */
 	prop = RNA_def_property(srna, "use_airbrush", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", BRUSH_AIRBRUSH);
@@ -1222,6 +1242,11 @@ static void rna_def_brush(BlenderRNA *brna)
 	RNA_def_property_ui_icon(prop, ICON_UNLOCKED, true);
 	RNA_def_property_ui_text(prop, "Use Automatic Strength Adjustment",
 	                         "Automatically adjust strength to give consistent results for different spacings");
+	RNA_def_property_update(prop, 0, "rna_Brush_update");
+
+	prop = RNA_def_property(srna, "use_alpha_vpaint", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", BRUSH_ALPHA_VPAINT);
+	RNA_def_property_ui_text(prop, "Alpha", "Gives transparany");
 	RNA_def_property_update(prop, 0, "rna_Brush_update");
 
 	/* adaptive space is not implemented yet */
