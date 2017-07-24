@@ -1464,8 +1464,6 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 			}
 
 			if (ob_dst->parent) {
-				invert_m4_m4(ob_dst->parentinv, dob->mat);
-
 				/* note, this may be the parent of other objects, but it should
 				 * still work out ok */
 				BKE_object_apply_mat4(ob_dst, dob->mat, false, true);
@@ -1486,7 +1484,6 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 			ob_dst->partype = PAROBJECT;
 
 			/* similer to the code above, see comments */
-			invert_m4_m4(ob_dst->parentinv, dob->mat);
 			BKE_object_apply_mat4(ob_dst, dob->mat, false, true);
 			DAG_id_tag_update(&ob_dst->id, OB_RECALC_OB);
 		}
@@ -1685,7 +1682,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			 * However, changing this is more design than bugfix, not to mention convoluted code below,
 			 * so that will be for later.
 			 * But at the very least, do not do that with linked IDs! */
-			if ((ID_IS_LINKED_DATABLOCK(ob) || ID_IS_LINKED_DATABLOCK(ob->data)) && !keep_original) {
+			if ((ID_IS_LINKED_DATABLOCK(ob) || (ob->data && ID_IS_LINKED_DATABLOCK(ob->data))) && !keep_original) {
 				keep_original = true;
 				BKE_reportf(op->reports, RPT_INFO,
 				            "Converting some linked object/object data, enforcing 'Keep Original' option to True");
