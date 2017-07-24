@@ -34,7 +34,6 @@
 
 #include "BKE_pbvh.h"
 #include "BKE_ccg.h"
-#include "BKE_subsurf.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_global.h"
 #include "BKE_mesh.h" /* for BKE_mesh_calc_normals */
@@ -607,10 +606,6 @@ void BKE_pbvh_build_grids(PBVH *bvh, CCGElem **grids,
 	MEM_freeN(prim_bbc);
 }
 
-void BKE_pbvh_add_ccgdm(PBVH *bvh, CCGDerivedMesh *ccgdm) {
-	bvh->ccgdm = ccgdm;
-}
-
 PBVH *BKE_pbvh_new(void)
 {
 	PBVH *bvh = MEM_callocN(sizeof(PBVH), "pbvh");
@@ -1118,7 +1113,7 @@ static void pbvh_update_draw_buffers(PBVH *bvh, PBVHNode **nodes, int totnode)
 						GPU_pbvh_bmesh_buffers_build(bvh->flags & PBVH_DYNTOPO_SMOOTH_SHADING);
 					break;
 			}
- 
+
 			node->flag &= ~PBVH_RebuildDrawBuffers;
 		}
 
@@ -1161,7 +1156,7 @@ static void pbvh_update_draw_buffers(PBVH *bvh, PBVHNode **nodes, int totnode)
 	}
 }
 
-void BKE_pbvh_draw_BB(PBVH *bvh)
+static void pbvh_draw_BB(PBVH *bvh)
 {
 	GPU_pbvh_BB_draw_init();
 
@@ -1334,11 +1329,6 @@ void BKE_pbvh_get_grid_key(const PBVH *bvh, CCGKey *key)
 	*key = bvh->gridkey;
 }
 
-CCGDerivedMesh *BKE_pbvh_get_ccgdm(const PBVH *bvh) {
-	return bvh->ccgdm;
-}
-
-
 BMesh *BKE_pbvh_get_bmesh(PBVH *bvh)
 {
 	BLI_assert(bvh->type == PBVH_BMESH);
@@ -1413,11 +1403,6 @@ void BKE_pbvh_node_num_verts(
 			if (r_uniquevert) *r_uniquevert = tot;
 			break;
 	}
-}
-
-void BKE_pbvh_get_num_nodes(const PBVH *bvh, int *r_totnode)
-{
-	*r_totnode = bvh->totnode;
 }
 
 void BKE_pbvh_node_get_grids(
@@ -1875,7 +1860,7 @@ void BKE_pbvh_draw(PBVH *bvh, float (*planes)[4], float (*fnors)[3],
 	}
 
 	if (G.debug_value == 14)
-		BKE_pbvh_draw_BB(bvh);
+		pbvh_draw_BB(bvh);
 }
 
 void BKE_pbvh_grids_update(PBVH *bvh, CCGElem **grids, void **gridfaces,

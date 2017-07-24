@@ -170,7 +170,7 @@ class VIEW3D_MT_editor_menus(Menu):
             mesh = obj.data
             if mesh.use_paint_mask:
                 layout.menu("VIEW3D_MT_select_paint_mask")
-            elif mesh.use_paint_mask_vertex and (mode_string == 'PAINT_WEIGHT' or mode_string == 'PAINT_VERTEX'):
+            elif mesh.use_paint_mask_vertex and mode_string == 'PAINT_WEIGHT':
                 layout.menu("VIEW3D_MT_select_paint_mask_vertex")
         elif mode_string != 'SCULPT':
             layout.menu("VIEW3D_MT_select_%s" % mode_string.lower())
@@ -1255,14 +1255,14 @@ class INFO_MT_add(Menu):
         layout.menu("INFO_MT_lamp_add", icon='OUTLINER_OB_LAMP')
         layout.separator()
 
-        layout.operator_menu_enum("object.effector_add", "type", text="Force Field", icon='OUTLINER_OB_EMPTY')
+        layout.operator_menu_enum("object.effector_add", "type", text="Force Field", icon='OUTLINER_OB_FORCE_FIELD')
         layout.separator()
 
         if len(bpy.data.groups) > 10:
             layout.operator_context = 'INVOKE_REGION_WIN'
-            layout.operator("object.group_instance_add", text="Group Instance...", icon='OUTLINER_OB_EMPTY')
+            layout.operator("object.group_instance_add", text="Group Instance...", icon='OUTLINER_OB_GROUP_INSTANCE')
         else:
-            layout.operator_menu_enum("object.group_instance_add", "group", text="Group Instance", icon='OUTLINER_OB_EMPTY')
+            layout.operator_menu_enum("object.group_instance_add", "group", text="Group Instance", icon='OUTLINER_OB_GROUP_INSTANCE')
 
 
 # ********** Object menu **********
@@ -1663,7 +1663,7 @@ class VIEW3D_MT_make_links(Menu):
             layout.operator("object.make_links_scene", text="Objects to Scene...", icon='OUTLINER_OB_EMPTY')
         else:
             layout.operator_context = 'EXEC_REGION_WIN'
-            layout.operator_menu_enum("object.make_links_scene", "scene", text="Objects to Scene...")
+            layout.operator_menu_enum("object.make_links_scene", "scene", text="Objects to Scene")
         layout.operator_context = operator_context_default
 
         layout.operator_enum("object.make_links_data", "type")  # inline
@@ -1779,7 +1779,6 @@ class VIEW3D_MT_paint_vertex(Menu):
         layout.operator("paint.vertex_color_set")
         layout.operator("paint.vertex_color_smooth")
         layout.operator("paint.vertex_color_dirt")
-        layout.operator("paint.weight_to_vertex_convert")
 
         layout.separator()
 
@@ -1870,7 +1869,6 @@ class VIEW3D_MT_paint_weight(Menu):
         layout.separator()
 
         layout.operator("paint.weight_set")
-        layout.operator("paint.weight_to_vertex_convert")
 
 
 # ********** Sculpt menu **********
@@ -3536,7 +3534,7 @@ class VIEW3D_PT_view3d_meshstatvis(Panel):
             row = layout.row(align=True)
             row.prop(statvis, "overhang_min", text="")
             row.prop(statvis, "overhang_max", text="")
-            layout.prop(statvis, "overhang_axis", expand=True)
+            layout.row().prop(statvis, "overhang_axis", expand=True)
         elif statvis_type == 'THICKNESS':
             row = layout.row(align=True)
             row.prop(statvis, "thickness_min", text="")

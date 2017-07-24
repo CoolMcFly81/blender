@@ -882,7 +882,7 @@ SoftBody *copy_softbody(const SoftBody *sb, bool copy_caches)
 	return sbn;
 }
 
-BulletSoftBody *copy_bulletsoftbody(BulletSoftBody *bsb)
+BulletSoftBody *copy_bulletsoftbody(const BulletSoftBody *bsb)
 {
 	BulletSoftBody *bsbn;
 
@@ -1014,7 +1014,7 @@ void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src)
 	}
 }
 
-static void copy_object_pose(Object *obn, Object *ob)
+static void copy_object_pose(Object *obn, const Object *ob)
 {
 	bPoseChannel *chan;
 	
@@ -1047,7 +1047,7 @@ static void copy_object_pose(Object *obn, Object *ob)
 	}
 }
 
-static void copy_object_lod(Object *obn, Object *ob)
+static void copy_object_lod(Object *obn, const Object *ob)
 {
 	BLI_duplicatelist(&obn->lodlevels, &ob->lodlevels);
 
@@ -1098,7 +1098,7 @@ void BKE_object_transform_copy(Object *ob_tar, const Object *ob_src)
 	copy_v3_v3(ob_tar->size, ob_src->size);
 }
 
-Object *BKE_object_copy_ex(Main *bmain, Object *ob, bool copy_caches)
+Object *BKE_object_copy_ex(Main *bmain, const Object *ob, bool copy_caches)
 {
 	Object *obn;
 	ModifierData *md;
@@ -1187,7 +1187,7 @@ Object *BKE_object_copy_ex(Main *bmain, Object *ob, bool copy_caches)
 }
 
 /* copy objects, will re-initialize cached simulation data */
-Object *BKE_object_copy(Main *bmain, Object *ob)
+Object *BKE_object_copy(Main *bmain, const Object *ob)
 {
 	return BKE_object_copy_ex(bmain, ob, false);
 }
@@ -2679,7 +2679,7 @@ void BKE_object_sculpt_modifiers_changed(Object *ob)
 {
 	SculptSession *ss = ob->sculpt;
 
-	if (ss && ss->modes.vwpaint.building_vp_handle == false) {
+	if (ss) {
 		if (!ss->cache) {
 			/* we free pbvh on changes, except during sculpt since it can't deal with
 			 * changing PVBH node organization, we hope topology does not change in
@@ -2690,9 +2690,6 @@ void BKE_object_sculpt_modifiers_changed(Object *ob)
 			}
 
 			BKE_sculptsession_free_deformMats(ob->sculpt);
-
-			/* In vertex/weight paint, force maps to be rebuilt. */
-			BKE_sculptsession_free_vwpaint_data(ob->sculpt);
 		}
 		else {
 			PBVHNode **nodes;

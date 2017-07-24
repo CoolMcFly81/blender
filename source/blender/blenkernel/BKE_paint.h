@@ -99,7 +99,7 @@ void BKE_paint_set_overlay_override(enum OverlayFlags flag);
 /* palettes */
 void                 BKE_palette_free(struct Palette *palette);
 struct Palette      *BKE_palette_add(struct Main *bmain, const char *name);
-struct Palette      *BKE_palette_copy(struct Main *bmain, struct Palette *palette);
+struct Palette      *BKE_palette_copy(struct Main *bmain, const struct Palette *palette);
 void                 BKE_palette_make_local(struct Main *bmain, struct Palette *palette, const bool lib_local);
 struct PaletteColor *BKE_palette_color_add(struct Palette *palette);
 bool                 BKE_palette_is_empty(const struct Palette *palette);
@@ -109,7 +109,7 @@ void                 BKE_palette_clear(struct Palette *palette);
 /* paint curves */
 struct PaintCurve *BKE_paint_curve_add(struct Main *bmain, const char *name);
 void BKE_paint_curve_free(struct PaintCurve *pc);
-struct PaintCurve *BKE_paint_curve_copy(struct Main *bmain, struct PaintCurve *pc);
+struct PaintCurve *BKE_paint_curve_copy(struct Main *bmain, const struct PaintCurve *pc);
 void               BKE_paint_curve_make_local(struct Main *bmain, struct PaintCurve *pc, const bool lib_local);
 
 void BKE_paint_init(struct Scene *sce, PaintMode mode, const char col[3]);
@@ -201,31 +201,10 @@ typedef struct SculptSession {
 
 	struct SculptStroke *stroke;
 	struct StrokeCache *cache;
-
-	union {
-		struct {
-			int *vert_map_mem;
-			struct MeshElemMap *vert_to_loop;
-			int *poly_map_mem;
-			struct MeshElemMap *vert_to_poly;
-
-			unsigned int (*total_color)[3];
-			double *total_weight;
-			unsigned int *tot_loops_hit;
-			float *max_weight;
-			unsigned int *previous_color;
-			float *previous_accum;
-			bool building_vp_handle;
-		} vwpaint;
-		//struct {
-		//ToDo: identify sculpt-only fields
-		//} sculpt;
-	} modes;
 } SculptSession;
 
 void BKE_sculptsession_free(struct Object *ob);
 void BKE_sculptsession_free_deformMats(struct SculptSession *ss);
-void BKE_sculptsession_free_vwpaint_data(struct SculptSession *ss);
 void BKE_sculptsession_bm_to_me(struct Object *ob, bool reorder);
 void BKE_sculptsession_bm_to_me_for_render(struct Object *object);
 void BKE_sculpt_update_mesh_elements(struct Scene *scene, struct Sculpt *sd, struct Object *ob,
