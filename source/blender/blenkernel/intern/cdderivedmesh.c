@@ -660,11 +660,6 @@ static void cdDM_drawMappedFaces(
 
 	const int *index_mp_to_orig  = dm->getPolyDataArray(dm, CD_ORIGINDEX);
 
-	if (cddm->pbvh) {
-		if (G.debug_value == 14)
-			BKE_pbvh_draw_BB(cddm->pbvh);
-	}
-
 	/* fist, setup common buffers */
 	GPU_vertex_setup(dm);
 	GPU_triangle_setup(dm);
@@ -751,10 +746,7 @@ static void cdDM_drawMappedFaces(
 	}
 	else if (setDrawOptions == NULL) {
 		/* just draw the entire face array */
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		GPU_buffer_draw_elements(dm->drawObject->triangles, GL_TRIANGLES, 0, tot_tri_elem);
-		glDisable(GL_BLEND);
 	}
 	else {
 		for (mat_index = 0; mat_index < dm->drawObject->totmaterial; mat_index++) {
@@ -1526,8 +1518,8 @@ static void cdDM_buffer_copy_mcol(
 
 	for (i = 0; i < totpoly; i++, mpoly++) {
 		for (j = 0; j < mpoly->totloop; j++) {
-			copy_v4_v4_uchar(&varray[start], &mloopcol[mpoly->loopstart + j].r);
-			start += 4;
+			copy_v3_v3_uchar(&varray[start], &mloopcol[mpoly->loopstart + j].r);
+			start += 3;
 		}
 	}
 }

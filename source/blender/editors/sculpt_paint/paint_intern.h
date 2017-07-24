@@ -54,7 +54,6 @@ struct wmOperator;
 struct wmOperatorType;
 struct wmWindowManager;
 struct DMCoNo;
-struct MeshElemMap;
 enum PaintMode;
 
 /* paint_stroke.c */
@@ -118,7 +117,6 @@ enum {
 	WPAINT_GRADIENT_TYPE_RADIAL
 };
 void PAINT_OT_weight_gradient(struct wmOperatorType *ot);
-void PAINT_OT_weight_to_vertex_convert(struct wmOperatorType *ot);
 
 void PAINT_OT_vertex_paint_toggle(struct wmOperatorType *ot);
 void PAINT_OT_vertex_paint(struct wmOperatorType *ot);

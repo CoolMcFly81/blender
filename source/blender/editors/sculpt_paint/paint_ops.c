@@ -1333,7 +1333,6 @@ void ED_operatortypes_paint(void)
 	WM_operatortype_append(PAINT_OT_weight_gradient);
 	WM_operatortype_append(PAINT_OT_weight_sample);
 	WM_operatortype_append(PAINT_OT_weight_sample_group);
-	WM_operatortype_append(PAINT_OT_weight_to_vertex_convert);
 
 	/* uv */
 	WM_operatortype_append(SCULPT_OT_uv_sculpt_stroke);
@@ -1616,7 +1615,6 @@ void ED_keymap_paint(wmKeyConfig *keyconf)
 	keymap->poll = vertex_paint_mode_poll;
 
 	WM_keymap_verify_item(keymap, "PAINT_OT_vertex_paint", LEFTMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "PAINT_OT_brush_colors_flip", XKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "PAINT_OT_sample_color", SKEY, KM_PRESS, 0, 0);
 
 	WM_keymap_add_item(keymap,
