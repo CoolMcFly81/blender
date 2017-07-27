@@ -533,6 +533,8 @@ typedef struct TransInfo {
 	/* alternative transformation. used to add offset to tracking markers */
 #define T_ALT_TRANSFORM		(1 << 24)
 
+#define T_CLNOR_REBUILD		(1 << 25)
+
 /* TransInfo->modifiers */
 #define	MOD_CONSTRAINT_SELECT	0x01
 #define	MOD_PRECISION			0x02
@@ -794,6 +796,8 @@ bool applyTransformOrientation(const struct bContext *C, float mat[3][3], char r
 
 int getTransformOrientation_ex(const struct bContext *C, float normal[3], float plane[3], const short around);
 int getTransformOrientation(const struct bContext *C, float normal[3], float plane[3]);
+
+void freeCustomNormalArray(TransInfo *t, TransCustomData *custom_data);
 
 void freeEdgeSlideTempFaces(EdgeSlideData *sld);
 void freeEdgeSlideVerts(TransInfo *t, TransCustomData *custom_data);
