@@ -427,9 +427,6 @@ int openSubdiv_supportGPUDisplay(void)
 
 int openSubdiv_getVersionHex(void)
 {
-<<<<<<< HEAD
-	return OPENSUBDIV_VERSION_NUMBER;
-=======
 #if defined(OPENSUBDIV_VERSION_NUMBER)
 	return OPENSUBDIV_VERSION_NUMBER;
 #elif defined(OPENSUBDIV_VERSION_MAJOR)
@@ -453,5 +450,4 @@ int openSubdiv_getVersionHex(void)
 #else
 	return 0;
 #endif
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 }

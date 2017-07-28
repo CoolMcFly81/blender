@@ -1261,14 +1261,7 @@ void DepsgraphRelationBuilder::build_particles(Scene *scene, Object *ob)
 		if (!psys_check_enabled(ob, psys, G.is_rendering))
 			continue;
 
-<<<<<<< HEAD
-		/* TODO(sergey): Are all particle systems depends on time?
-		 * Hair without dynamics i.e.
-		 */
-		add_relation(time_src_key, psys_key, "TimeSrc -> PSys");
-=======
 		add_relation(eval_init_key, psys_key, "Init -> PSys");
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 
 		/* TODO(sergey): Currently particle update is just a placeholder,
 		 * hook it to the ubereval node so particle system is getting updated

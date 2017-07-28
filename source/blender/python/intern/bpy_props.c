@@ -2863,13 +2863,8 @@ PyDoc_STRVAR(BPy_PointerProperty_doc,
                               "name=\"\", "
                               "description=\"\", "
                               "options={'ANIMATABLE'}, "
-<<<<<<< HEAD
-                              "update=None, "
-                              "poll=None)\n"
-=======
                               "poll=None, "
                               "update=None)\n"
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 "\n"
 "   Returns a new pointer property definition.\n"
 "\n"

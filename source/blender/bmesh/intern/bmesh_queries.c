@@ -1516,11 +1516,6 @@ float BM_loop_calc_face_angle(const BMLoop *l)
  */
 float BM_loop_calc_face_normal_safe_ex(const BMLoop *l, const float epsilon_sq, float r_normal[3])
 {
-<<<<<<< HEAD
-#define FEPSILON 1e-5f
-
-=======
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 	/* Note: we cannot use result of normal_tri_v3 here to detect colinear vectors (vertex on a straight line)
 	 * from zero value, because it does not normalize both vectors before making crossproduct.
 	 * Instead of adding two costly normalize computations, just check ourselves for colinear case. */
@@ -1529,16 +1524,6 @@ float BM_loop_calc_face_normal_safe_ex(const BMLoop *l, const float epsilon_sq, 
 	sub_v3_v3v3(v1, l->prev->v->co, l->v->co);
 	sub_v3_v3v3(v2, l->next->v->co, l->v->co);
 
-<<<<<<< HEAD
-	const float fac = (v2[0] == 0.0f) ? ((v2[1] == 0.0f) ? ((v2[2] == 0.0f) ? 0.0f : v1[2] / v2[2]) : v1[1] / v2[1]) : v1[0] / v2[0];
-
-	mul_v3_v3fl(v_tmp, v2, fac);
-	sub_v3_v3(v_tmp, v1);
-	if (fac != 0.0f && !is_zero_v3(v1) && len_manhattan_v3(v_tmp) > FEPSILON) {
-		/* Not co-linear, we can compute crossproduct and normalize it into normal. */
-		cross_v3_v3v3(r_normal, v1, v2);
-		normalize_v3(r_normal);
-=======
 	const float fac =
 	        ((v2[0] == 0.0f) ?
 	        ((v2[1] == 0.0f) ?
@@ -1550,7 +1535,6 @@ float BM_loop_calc_face_normal_safe_ex(const BMLoop *l, const float epsilon_sq, 
 		/* Not co-linear, we can compute crossproduct and normalize it into normal. */
 		cross_v3_v3v3(r_normal, v1, v2);
 		return normalize_v3(r_normal);
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 	}
 	else {
 		copy_v3_v3(r_normal, l->f->no);
@@ -1588,12 +1572,7 @@ float BM_loop_calc_face_normal(const BMLoop *l, float r_normal[3])
 	if (UNLIKELY(len == 0.0f)) {
 		copy_v3_v3(r_normal, l->f->no);
 	}
-<<<<<<< HEAD
-
-#undef FEPSILON
-=======
 	return len;
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
 }
 
 /**

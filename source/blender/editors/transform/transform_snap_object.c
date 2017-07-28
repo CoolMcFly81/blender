@@ -861,11 +861,7 @@ static bool raycastObjects(
 
 /* -------------------------------------------------------------------- */
 
-<<<<<<< HEAD
-/** Common utilities
-=======
 /** Snap Nearest utilities
->>>>>>> ba8737c2ab00b5e04561396f68a5b13820ac2788
  * \{ */
 
 static void copy_dm_vert_no(const int index, float r_no[3], const BVHTreeFromMesh *data)
