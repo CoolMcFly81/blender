@@ -38,8 +38,6 @@ struct BMEdge;
 struct BMLoop;
 struct BMFace;
 
-struct MLoopNorSpaceArray;
-
 struct BLI_mempool;
 
 /* note: it is very important for BMHeader to start with two
@@ -255,9 +253,6 @@ typedef struct BMesh {
 	ListBase errorstack;
 
 	void *py_handle;
-
-	struct MLoopNorSpaceArray *lnor_spacearr;  /* Stores MLoopNorSpaceArray for this BMesh */
-	char spacearr_dirty;
 } BMesh;
 
 /* BMHeader->htype (char) */
@@ -268,30 +263,8 @@ enum {
 	BM_FACE = 8
 };
 
-typedef struct TransDataLoopNormal {
-	int loop_index;
-	float mtx[3][3];
-	float smtx[3][3];
-	float niloc[3];
-	float nloc[3];
-	float *loc;
-	short *clnors_data;
-} TransDataLoopNormal;
-
-typedef struct LoopNormalData {
-	TransDataLoopNormal *normal;
-
-	int offset;
-	int totloop;
-	void *funcdata;
-} LoopNormalData;
-
 #define BM_ALL (BM_VERT | BM_EDGE | BM_LOOP | BM_FACE)
 #define BM_ALL_NOLOOP (BM_VERT | BM_EDGE | BM_FACE)
-
-#define BM_SPACEARR_DIRTY (1 << 1)
-#define BM_SPACEARR_DIRTY_ALL (1 << 2)
-#define BM_SPACEARR_BMO_SET (1 << 3)
 
 /* args for _Generic */
 #define _BM_GENERIC_TYPE_ELEM_NONCONST \
@@ -372,9 +345,6 @@ enum {
 	 * since tools may want to tag verts and
 	 * not have functions clobber them */
 	BM_ELEM_INTERNAL_TAG = (1 << 7),
-
-	/* Space invalid when set. */
-	BM_ELEM_LNORSPACE = (1 << 6)
 };
 
 struct BPy_BMGeneric;
